@@ -1,0 +1,2 @@
+Output seq 1:*****GTTAGC-GCTA
+Output seq 2:*****GCTAGCAGCTA
