@@ -10,7 +10,6 @@
  #include "string.h"
  #include "stdlib.h"
  #include "stdint.h"
- //#include "fstream.h"
  #include "swalign.h"
 
 /*Considering 300bp constitute a short read*/
@@ -99,7 +98,7 @@ void traceback(sw_entry SW[301][301], int seq1_len, int seq2_len, char *seq1, ch
 			}
 		}
 	}
-    printf("Highest score index i:%d, j:%d and score:%d\n",idx_i, idx_j, sw_max.value);
+    //printf("Highest score index i:%d, j:%d and score:%d\n",idx_i, idx_j, sw_max.value);
     int I = idx_i, J = idx_j;
     int s_idx;
     if(idx_i > idx_j)
@@ -139,6 +138,8 @@ void traceback(sw_entry SW[301][301], int seq1_len, int seq2_len, char *seq1, ch
 
 }
 
+#define L 100
+#define no_seq 10
 
 /*Main function*/
 int main(int argc, char *argv[]){
@@ -154,65 +155,73 @@ int main(int argc, char *argv[]){
  	 */
     //sprintf(buff1,argv[1]);
     //sprintf(buff2,argv[2]);
-    input1 = fopen("sequence1.txt","rb");//input1 = fopen(argv[1],"rb");
+    input1 = fopen("seq1_out.txt","rb");//input1 = fopen(argv[1],"rb");
 	if (!input1) {
-	  printf("Unable to open input file %s.\n", "sequence1.txt");//argv[1]);
+	  printf("Unable to open input file %s.\n", "seq1_out.txt");//argv[1]);
 	  fflush(stdout);
 	  exit(-1);
 	}	
-	input2 = fopen("sequence2.txt","rb");//input2 = fopen(argv[2],"rb");
+	input2 = fopen("seq2_out.txt","rb");//input2 = fopen(argv[2],"rb");
 	if (!input2) {
-	  printf("Unable to open input file %s.\n", "sequence2.txt");//argv[2]);
+	  printf("Unable to open input file %s.\n", "seq2_out.txt");//argv[2]);
 	  fflush(stdout);
 	  exit(-1);
 	}
 
+    char line[] = "Output seq 1:";
+    char line1[] = "Output seq 2:";
+    output = fopen("align_out.txt","wb");
+
+    for (int k=0; k < no_seq; k++)
+    {
 	/* Load data from textfile */
         seq1[0] = '-';
         seq2[0] = '-';
-	fread(&seq1[1], sizeof(char), 300, input1);
-	fread(&seq2[1], sizeof(char), 300, input2); 
-    fclose(input1);
-    fclose(input2);
-
-	printf("Beginning computation\n");
-	fflush(stdout);
+	fread(&seq1[1], sizeof(char), L+1, input1);
+	fread(&seq2[1], sizeof(char), L+1, input2); 
+    
  
  	l1 = strlen(seq1)-1;
  	l2 = strlen(seq2)-1;
         printf("Size of seq1:%d\n", l1-1);
-        printf("first char in seq1:%c\n", seq1[0]);
+        printf("first char in seq1:%c\n", seq1[1]);
         printf("Size of seq2:%d\n", l2-1);
-        printf("first char in seq2:%c\n", seq2[0]);
+        printf("first char in seq2:%c\n", seq2[1]);
  	/*Start scoring*/
  	init_DP(l1, l2);
   
         Score_Matrix[0][0].value = 0;
-        for(int j=1; j<l2; j++){
+        for(int j=1; j<L; j++){
           Score_Matrix[0][j].value = 0;
         }
-        for(int i=1; i<l1; i++){
+        for(int i=1; i<L; i++){
           Score_Matrix[i][0].value = 0;
         }
 
- 	for(int i=1; i<l1; i++){
- 		for(int j=1; j<l2; j++){
+ 	for(int i=1; i<L; i++){
+ 		for(int j=1; j<L; j++){
  			Score_Matrix[i][j] = compute_DP(i,j, seq1, seq2);
  		}
  	}
 
     traceback(Score_Matrix, l1, l2, seq1, seq2, seq1_out, seq2_out);
-    printf("output seq1[1]:%c, seq2[1]:%c\n", seq1_out[1], seq2_out[1]);
-    printf("output length 1: %d, 2: %d\n", strlen(seq1_out), strlen(seq2_out));
+    //printf("output seq1[1]:%c, seq2[1]:%c\n", seq1_out[1], seq2_out[1]);
+    //printf("output length 1: %d, 2: %d\n", strlen(seq1_out), strlen(seq2_out));
     /* Write result to file */
-      char line[] = "Output seq 1:";
-      char line1[] = "Output seq 2:";
-      output = fopen("align_out.txt","wb");
+      
         fwrite(line, sizeof(char), strlen(line), output);
 	fwrite(seq1_out, sizeof(char), strlen(seq1_out), output);
         fprintf(output,"\n");
         fwrite(line1, sizeof(char), strlen(line1), output);
 	fwrite(seq2_out, sizeof(char), strlen(seq2_out), output);
+        if(k != L-1)
+          fprintf(output,"\n");
+
+    }
+        fclose(input1);
+        fclose(input2);
+	fflush(stdout);
+
 	fclose(output);
 
 	printf("Output complete.\n");
