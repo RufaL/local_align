@@ -17,6 +17,8 @@
 
 /*Considering 300bp constitute a short read*/
 int M[300][300], X[300][300], Y[300][300];  //DP matrices
+/*const int for penalty*/
+const int penalty = gap_open + gap_extn;    
 
 __global__ int match_score(int i, int j, char *seq1, char *seq2){
 	if(seq1[i] == seq2[j])
@@ -44,7 +46,6 @@ __global__ void init_DP(int seq1_len, int seq2_len){
 
 __global__ sw_entry compute_DP(int seq1_i, int seq2_i, char *seq1, char *seq2){
     int M_max =0, X_max, Y_max;
-    int penalty = gap_open + gap_extn;
     sw_entry SW_i_j;
     //printf("BEFORE\n");
     //printf("Index i:%d, j:%d, seq1:%c, seq2:%c, score:%d, dir:%d\n",seq1_i, seq2_i, seq1[seq1_i], seq2[seq2_i], SW_i_j.value, SW_i_j.direction);
@@ -87,7 +88,7 @@ __global__ sw_entry compute_DP(int seq1_i, int seq2_i, char *seq1, char *seq2){
 
 }
 
-__global__ void traceback(sw_entry SW[301][301], int seq1_len, int seq2_len, char *seq1, char *seq2, char *seq1_out, char *seq2_out){
+__global__ void traceback(sw_entry *SW, int seq1_len, int seq2_len, char *seq1, char *seq2, char *seq1_out, char *seq2_out){
 	sw_entry sw_max;
 	int idx_i, idx_j;
 
@@ -141,50 +142,36 @@ __global__ void traceback(sw_entry SW[301][301], int seq1_len, int seq2_len, cha
 
 }
 
-__global__ void read_align(FILE *input1, FILE *input2, FILE *output){
-    char seq1[L+1], seq2[L+1];
-    char seq1_out[L+1], seq2_out[L+1];
-    sw_entry Score_Matrix[L+1][L+1];
-    char line[] = "Output seq 1:";
-    char line1[] = "Output seq 2:";
-    int l_size = strlen(line);
-
-    {
-    /* Load data from textfile */
-        seq1[0] = '-';
-        seq2[0] = '-';
-    fseek(input1, threadIdx.x * (L+1), SEEK_SET);
-    fseek(input1, threadIdx.x * (L+1), SEEK_SET);
-    fread(&seq1[1], sizeof(char), L+1, input1);
-    fread(&seq2[1], sizeof(char), L+1, input2); 
+__global__ void read_align(char *seq1, char *seq2){
     
- 
-    /*Start scoring*/
-    init_DP(L+1, L+1);
-  
-        Score_Matrix[0][0].value = 0;
-        for(int j=1; j<L+1; j++){
-          Score_Matrix[0][j].value = 0;
-        }
+   int seq_i;
+   sw_entry Score_Matrix[L+1][L+1];
+
+   if(threadIdx.x < no_seq)
+   {
+        seq_i = threadIdx.x * (L+1);
+        seq1[seq_i] = '-';
+        seq2[seq_i] = '-';
+        seq1_out[seq_i] = '$';
+        seq2_out[seq_i] = '$';
+        /*Start scoring*/
+        init_DP(L+1, L+1);
+      
+            Score_Matrix[0][0].value = 0;
+            for(int j=1; j<L+1; j++){
+              Score_Matrix[0][j].value = 0;
+            }
+            for(int i=1; i<L+1; i++){
+              Score_Matrix[i][0].value = 0;
+            }
+
         for(int i=1; i<L+1; i++){
-          Score_Matrix[i][0].value = 0;
+            for(int j=1; j<L+1; j++){
+                Score_Matrix[i][j] = compute_DP(i,j, &seq1[seq_i], &seq2[seq_i]);
+            }
         }
 
-    for(int i=1; i<L+1; i++){
-        for(int j=1; j<L+1; j++){
-            Score_Matrix[i][j] = compute_DP(i,j, seq1, seq2);
-        }
-    }
-
-    traceback(Score_Matrix, L, L, seq1, seq2, seq1_out, seq2_out);
-
-    /* Write result to file */
-    fseek(output, threadIdx.x*2*(L+l_size), SEEK_SET);
-    fwrite(line, sizeof(char), strlen(line), output);
-    fwrite(seq1_out, sizeof(char), strlen(seq1_out), output);
-    fprintf(output,"\n");
-    fwrite(line1, sizeof(char), strlen(line1), output);
-    fwrite(seq2_out, sizeof(char), strlen(seq2_out), output);
+        traceback(Score_Matrix, L, L, &seq1[seq_i], &seq2[seq_i], &seq1_out[seq_out_i], &seq2_out[seq_out_i]);
         
 
     }
@@ -194,8 +181,6 @@ __global__ void read_align(FILE *input1, FILE *input2, FILE *output){
 /*Main function*/
 int main(int argc, char *argv[]){
     
-    int l1, l2;
-    char buff1[128], buff2[128];
     FILE *input1, *input2;
     FILE *output;
 	/*Read in the two sequences to be aligned, one from refrence and another a query
@@ -216,19 +201,55 @@ int main(int argc, char *argv[]){
 	  exit(-1);
 	}
 
-    
     output = fopen("align_out.txt","wb");
 
-    read_align<<<1,no_seq>>>(input1, input2, output);
+    char *seq1, *seq2;
+    char *seq1_out, *seq2_out;
+    char line[] = "Output seq 1:";
+    char line1[] = "Output seq 2:";
+    int l_size = strlen(line);
+
+    /*Dynamic memory allocation*/
+    seq1 = (char*) malloc(no_seq * (L+1) * sizeof(char));
+    if (seq1 == NULL) fprintf(stderr, "Bad malloc on seq1\n");
+    seq2 = (char*) malloc(no_seq * (L+1) * sizeof(char));
+    if (seq2 == NULL) fprintf(stderr, "Bad malloc on seq2\n");
+    seq1_out = (char*) malloc(no_seq * (L+1) * sizeof(char));
+    if (seq1_out == NULL) fprintf(stderr, "Bad malloc on seq1_out\n");
+    seq2_out = (char*) malloc(no_seq * (L+1) * sizeof(char));
+    if (seq2_out == NULL) fprintf(stderr, "Bad malloc on seq2_out\n");
+
+    /* Load data from textfile */
+    seq1[0] = '-';
+    seq2[0] = '-';
+    fread(&seq1[1], sizeof(char), (L+1)*no_seq, input1);
+    fread(&seq2[1], sizeof(char), (L+1)*no_seq, input2);
 
     fclose(input1);
     fclose(input2);
-	fflush(stdout);
+    fflush(stdout);
+
+    read_align<<<1,no_seq>>>(seq1, seq2);
+
+    /* Write result to file */
+    for(int m=0; m < no_seq; m++){
+        fwrite(line, sizeof(char), strlen(line), output);
+        fwrite(&seq1_out[m*(L+1)], sizeof(char), L+1, output);
+        fprintf(output,"\n");
+        fwrite(line1, sizeof(char), strlen(line1), output);
+        fwrite(&seq2_out[m*(L+1)], sizeof(char), L+1, output);
+    }
 
 	fclose(output);
 
 	printf("Output complete.\n");
 	fflush(stdout);
+
+    /*Cleanup*/
+    free(seq1);
+    free(seq2);
+    free(seq1_out);
+    free(seq2_out);
 
 	return 0;
 }
