@@ -12,10 +12,6 @@
  #include "stdint.h"
  #include "swalign.h"
 
-#define L 100
-#define no_seq 10
-
-
 /*const int for penalty*/
 const int penalty = gap_open + gap_extn;    
 
@@ -26,24 +22,24 @@ __global__ int match_score(int i, int j, char *seq1, char *seq2){
 		return mismatch;
 }
 
-__global__ void init_DP(int seq1_len, int seq2_len){
+__global__ void init_DP(int M[][L+1], int X[][L+1], int Y[][L+1]){
 	M[0][0] = 0;
 	X[0][0] = -1000;
 	Y[0][0] = -1000;
-	for(int i=1; i <seq1_len; i++){
+	for(int i=1; i <L+1; i++){
 		M[i][0] = 0;
 		X[i][0] = -1000;   //Just a large negative number
 		Y[i][0] = -1000;
 	}
 
-	for(int j=1; j< seq2_len; j++){
+	for(int j=1; j< L+1; j++){
 		M[0][j] = 0;
 		X[0][j] = -1000;   //Just a large negative number
 		Y[0][j] = -1000;
 	}
 }
 
-__global__ sw_entry compute_DP(int seq1_i, int seq2_i, char *seq1, char *seq2, int *M, int *X, int *Y){
+__global__ sw_entry compute_DP(int seq1_i, int seq2_i, char *seq1, char *seq2, int M[][L+1], int X[][L+1], int Y[][L+1]){
     int M_max =0, X_max, Y_max;
     sw_entry SW_i_j;
     //printf("BEFORE\n");
@@ -87,7 +83,7 @@ __global__ sw_entry compute_DP(int seq1_i, int seq2_i, char *seq1, char *seq2, i
 
 }
 
-__global__ void traceback(sw_entry *SW, int seq1_len, int seq2_len, char *seq1, char *seq2, char *seq1_out, char *seq2_out){
+__global__ void traceback(sw_entry SW[][L+1], int M[][L+1], char *seq1, char *seq2, char *seq1_out, char *seq2_out){
 	sw_entry sw_max;
 	int idx_i, idx_j;
 
@@ -156,7 +152,7 @@ __global__ void read_align(char *seq1, char *seq2, char *seq1_out, char *seq2_ou
         seq1_out[seq_i] = '$';
         seq2_out[seq_i] = '$';
         /*Start scoring*/
-        init_DP(L+1, L+1);
+        init_DP(M, X, Y);
       
             Score_Matrix[0][0].value = 0;
             for(int j=1; j<L+1; j++){
@@ -172,7 +168,7 @@ __global__ void read_align(char *seq1, char *seq2, char *seq1_out, char *seq2_ou
             }
         }
 
-        traceback(Score_Matrix, L, L, &seq1[seq_i], &seq2[seq_i], &seq1_out[seq_out_i], &seq2_out[seq_out_i]);
+        traceback(Score_Matrix, M, &seq1[seq_i], &seq2[seq_i], &seq1_out[seq_out_i], &seq2_out[seq_out_i]);
         
 
     }
