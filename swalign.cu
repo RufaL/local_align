@@ -15,8 +15,7 @@
 #define L 100
 #define no_seq 10
 
-/*Considering 300bp constitute a short read*/
-int M[300][300], X[300][300], Y[300][300];  //DP matrices
+
 /*const int for penalty*/
 const int penalty = gap_open + gap_extn;    
 
@@ -44,7 +43,7 @@ __global__ void init_DP(int seq1_len, int seq2_len){
 	}
 }
 
-__global__ sw_entry compute_DP(int seq1_i, int seq2_i, char *seq1, char *seq2){
+__global__ sw_entry compute_DP(int seq1_i, int seq2_i, char *seq1, char *seq2, int *M, int *X, int *Y){
     int M_max =0, X_max, Y_max;
     sw_entry SW_i_j;
     //printf("BEFORE\n");
@@ -142,10 +141,12 @@ __global__ void traceback(sw_entry *SW, int seq1_len, int seq2_len, char *seq1, 
 
 }
 
-__global__ void read_align(char *seq1, char *seq2){
+__global__ void read_align(char *seq1, char *seq2, char *seq1_out, char *seq2_out){
     
    int seq_i;
    sw_entry Score_Matrix[L+1][L+1];
+   /*Considering 300bp constitute a short read*/
+   int M[L+1][L+1], X[L+1][L+1], Y[L+1][L+1];  //DP matrices
 
    if(threadIdx.x < no_seq)
    {
@@ -167,7 +168,7 @@ __global__ void read_align(char *seq1, char *seq2){
 
         for(int i=1; i<L+1; i++){
             for(int j=1; j<L+1; j++){
-                Score_Matrix[i][j] = compute_DP(i,j, &seq1[seq_i], &seq2[seq_i]);
+                Score_Matrix[i][j] = compute_DP(i,j, &seq1[seq_i], &seq2[seq_i], M, X, Y);
             }
         }
 
@@ -183,9 +184,9 @@ int main(int argc, char *argv[]){
     
     FILE *input1, *input2;
     FILE *output;
-	/*Read in the two sequences to be aligned, one from refrence and another a query
- 	 *short read, which are stored in a text file and store in arrays seq1[] and seq2[]
- 	 */
+   /*Read in the two sequences to be aligned, one from refrence and another a query
+    *short read, which are stored in a text file and store in arrays seq1[] and seq2[]
+    */
     //sprintf(buff1,argv[1]);
     //sprintf(buff2,argv[2]);
     input1 = fopen("seq1_out.txt","rb");//input1 = fopen(argv[1],"rb");
@@ -207,17 +208,27 @@ int main(int argc, char *argv[]){
     char *seq1_out, *seq2_out;
     char line[] = "Output seq 1:";
     char line1[] = "Output seq 2:";
-    int l_size = strlen(line);
+    int l_size = strlen(line), s_size = no_seq * (L+1) * sizeof(char) ;
 
-    /*Dynamic memory allocation*/
-    seq1 = (char*) malloc(no_seq * (L+1) * sizeof(char));
+    /*Dynamic memory allocation at Host*/
+    seq1 = (char*) malloc(s_size);
     if (seq1 == NULL) fprintf(stderr, "Bad malloc on seq1\n");
-    seq2 = (char*) malloc(no_seq * (L+1) * sizeof(char));
+    seq2 = (char*) malloc(s_size);
     if (seq2 == NULL) fprintf(stderr, "Bad malloc on seq2\n");
-    seq1_out = (char*) malloc(no_seq * (L+1) * sizeof(char));
+    seq1_out = (char*) malloc(s_size);
     if (seq1_out == NULL) fprintf(stderr, "Bad malloc on seq1_out\n");
-    seq2_out = (char*) malloc(no_seq * (L+1) * sizeof(char));
+    seq2_out = (char*) malloc(s_size);
     if (seq2_out == NULL) fprintf(stderr, "Bad malloc on seq2_out\n");
+
+   /*Allocate memory in Device*/
+   char *seq1_d;
+   cudaMalloc(&seq1_d, s_size);
+   char *seq2_d;
+   cudaMalloc(&seq2_d, s_size);
+   char *seq1_out_d;
+   cudaMalloc(&seq1_out_d, s_size);
+   char *seq2_out_d;
+   cudaMalloc(&seq2_out_d, s_size);
 
     /* Load data from textfile */
     seq1[0] = '-';
@@ -229,7 +240,16 @@ int main(int argc, char *argv[]){
     fclose(input2);
     fflush(stdout);
 
-    read_align<<<1,no_seq>>>(seq1, seq2);
+    /*Copy data from Host to Device*/
+    cudaMemcpy(seq1_d, seq1, s_size, cudaMemcpyHostToDevice);
+    cudaMemcpy(seq2_d, seq2, s_size, cudaMemcpyHostToDevice);
+    
+    /*Perform alignment at Device*/
+    read_align<<<1,no_seq>>>(seq1_d, seq2_d, seq1_out_d, seq2_out_d);
+
+    /*Copy output data from Device to Host*/
+    cudaMemcpy(seq1_out, seq1_out_d, s_size, cudaMemcpyDeviceToHost);
+    cudaMemcpy(seq2_out, seq2_out_d, s_size, cudaMemcpyDeviceToHost);
 
     /* Write result to file */
     for(int m=0; m < no_seq; m++){
@@ -245,11 +265,17 @@ int main(int argc, char *argv[]){
 	printf("Output complete.\n");
 	fflush(stdout);
 
-    /*Cleanup*/
+    /*Free Device memory*/
+    cudaFree(seq1_d);
+    cudaFree(seq2_d);
+    cudaFree(seq1_out_d);
+    cudaFree(seq2_out_d);
+
+    /*Free Host memory*/
     free(seq1);
     free(seq2);
     free(seq1_out);
     free(seq2_out);
 
-	return 0;
+    return 0;
 }
