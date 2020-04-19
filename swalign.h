@@ -11,7 +11,7 @@
 #include "stdlib.h"
 #include "stdint.h"
 
-#define L 10
+#define L 100
 #define no_seq 1
 
 /*Enumeration of DP matrices*/
@@ -30,13 +30,12 @@ typedef struct {
 
 const int match = 10, mismatch = -2;      //Match and Mismatch scores
 const int gap_open = -15, gap_extn = -7; //Gap opening and extension penalty, values example
+ 
 
-int match_score(int i, int j, char *seq1, char *seq2); 
+//void init_DP(int M[][L+1], int X[][L+1], int Y[][L+1]);
 
-void init_DP(int M[][L+1], int X[][L+1], int Y[][L+1]);
+//void compute_DP(sw_entry SW_i_j, int seq1_i, int seq2_i, char *seq1, char *seq2, int M[][L+1], int X[][L+1], int Y[][L+1]);
 
-sw_entry compute_DP(int seq1_i, int seq2_i, char *seq1, char *seq2, int M[][L+1], int X[][L+1], int Y[][L+1]);
-
-void traceback(sw_entry SW[][L+1], int M[][L+1], char *seq1, char *seq2, char *seq1_out, char *seq2_out);
+//void traceback(sw_entry SW[][L+1], int M[][L+1], char *seq1, char *seq2, char *seq1_out, char *seq2_out);
 
 #endif
