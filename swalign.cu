@@ -17,7 +17,7 @@
 /*const int for penalty*/
 const int penalty = gap_open + gap_extn;    
 
-__device__ void init_DP(int M[][L+1], int X[][L+1], int Y[][L+1]){
+__host__ __device__ void init_DP(int M[][L+1], int X[][L+1], int Y[][L+1]){
 	M[0][0] = 0;
 	X[0][0] = -1000;
 	Y[0][0] = -1000;
@@ -34,7 +34,7 @@ __device__ void init_DP(int M[][L+1], int X[][L+1], int Y[][L+1]){
 	}
 }
 
-__device__ void compute_DP(sw_entry SW_i_j, int seq1_i, int seq2_i, char *seq1, char *seq2, int M[][L+1], int X[][L+1], int Y[][L+1]){
+__host__ __device__ void compute_DP(sw_entry SW_i_j, int seq1_i, int seq2_i, char *seq1, char *seq2, int M[][L+1], int X[][L+1], int Y[][L+1]){
     int M_max =0, X_max, Y_max;
     int match_score;
     //printf("BEFORE\n");
@@ -81,9 +81,8 @@ __device__ void compute_DP(sw_entry SW_i_j, int seq1_i, int seq2_i, char *seq1, 
 
 }
 
-//__device__ sw_entry sw_max;
-//__device__ int idx_i, idx_j;
-__device__ void traceback(sw_entry SW[][L+1], int M[][L+1], char *seq1, char *seq2, char *seq1_out, char *seq2_out){
+
+__host__ __device__ void traceback(sw_entry SW[][L+1], int M[][L+1], char *seq1, char *seq2, char *seq1_out, char *seq2_out){
 	sw_entry sw_max;
 	int idx_i, idx_j;
 
