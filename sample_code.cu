@@ -24,7 +24,7 @@ int main(void)
 
   cudaMalloc(&a_d, sizeof(char));
   cudaMalloc(&b_d, sizeof(char));
-  printf("Size of x:%d, d_x:%d\n",sizeof(x), sizeof(d_x));
+ // printf("Size of x:%d, d_x:%d\n",sizeof(x), sizeof(d_x));
 
   for (int i = 0; i < N; i++) {
     x[i] = 1.0f;
