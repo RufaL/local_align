@@ -34,64 +34,6 @@ __host__ __device__ void init_DP(int M[][L+1], int X[][L+1], int Y[][L+1]){
 	}
 }
 
-__host__ __device__ void compute_DP(sw_entry SW[][L+1], char *seq1, char *seq2, int M[][L+1], int X[][L+1], int Y[][L+1]){
-    int M_max =0, X_max, Y_max;
-    int M_x, M_y, M_m;
-    int match_score;
-    sw_entry SW_ij;
-    
-   for(int i = 1; i < L+1; i++){
-	  for(int j = 1; j <L+1; j++){
-   if(seq1[i] == seq2[j])
-   	match_score = match;
-   else
-   	match_score = mismatch;
-
-   M_m = M[i-1][j-1] + match_score;
-   M_x = X[i-1][j-1] + match_score;
-   M_y = Y[i-1][j-1] + match_score;
-   
-	if(M_m >= M_x && M_m >= M_y && M_m > 0) 
-		M_max = M_m;
-	else if(M_x >= M_m && M_x >= M_y && M_x > 0)
-		M_max = M_x;
-	     else if(M_y >= M_m && M_y >= M_x && M_y > 0)
-		     M_max = M_y;
-
-	M[i][j] =  M_max;
-     
-    Y_max = gap_extn + Y[i][j-1];
-    if(penalty + M[i][j-1] > Y_max)
-    	Y_max = M[i][j-1] + penalty;
-
-    Y[i][j] = Y_max;
-     
-    X_max = gap_extn + X[i-1][j];
-    if(penalty + M[i-1][j] > X_max)
-    	X_max = M[i-1][j] + penalty;
-
-    X[i][j] = X_max;
-    
-    
-    if(X_max >= Y_max && X_max >= M_max){
-    	SW_ij.value = X_max;
-    	SW_ij.direction = x;
-    }
-    else if(Y_max >= X_max && Y_max >= M_max){
-            SW_ij.value = Y_max;
-    	    SW_ij.direction = y;
-         }
-         else if(M_max >= X_max && M_max >= Y_max){
-		 SW_ij.value = M_max;
-		 SW_ij.direction = m;
-	 }
-
-    SW[i][j] = SW_ij;	 
-    //printf("AFTER\n");
-    //printf("Index i:%d, j:%d, seq1:%c, seq2:%c, score:%d, dir:%d\n",seq1_i, seq2_i, seq1[seq1_i], seq2[seq2_i], SW_i_j.value, SW_i_j.direction);
-   }  }
-
-}
 
 __host__ __device__ void traceback(sw_entry SW[][L+1], int M[][L+1], char *seq1, char *seq2, char *seq1_out, char *seq2_out, int *i, int *j, int *s_i){
      DP_dir SW_dir;
@@ -163,12 +105,68 @@ __global__ void read_align(char *seq1, char *seq2, char *seq1_out, char *seq2_ou
             }
         A = M[0][0];
         seq1_out[A] = 'Z';
+	   
+ /*Compute DP matrices */
+    int M_max =0, X_max, Y_max;
+    int M_x, M_y, M_m;
+    int match_score;
+    int i, j;
 
-        compute_DP(Score_Matrix, seq1, seq2, &seq_i, M, X, Y);
+    for(int I = 1; I < L+1; I++){
+       for(int J = 1; J <L+1; J++){
+			  i = I + seq_i;
+			  j = J + seq_i;
+	   if(seq1[i] == seq2[j])
+		match_score = match;
+	   else
+		match_score = mismatch;
+
+	   M_m = M[i-1][j-1] + match_score;
+	   M_x = X[i-1][j-1] + match_score;
+	   M_y = Y[i-1][j-1] + match_score;
+
+		if(M_m >= M_x && M_m >= M_y && M_m > 0) 
+			M_max = M_m;
+		else if(M_x >= M_m && M_x >= M_y && M_x > 0)
+			M_max = M_x;
+		     else if(M_y >= M_m && M_y >= M_x && M_y > 0)
+			     M_max = M_y;
+
+		M[i][j] =  M_max;
+
+	    Y_max = gap_extn + Y[i][j-1];
+	    if(penalty + M[i][j-1] > Y_max)
+		Y_max = M[i][j-1] + penalty;
+
+	    Y[i][j] = Y_max;
+
+	    X_max = gap_extn + X[i-1][j];
+	    if(penalty + M[i-1][j] > X_max)
+		X_max = M[i-1][j] + penalty;
+
+	    X[i][j] = X_max;
+
+
+	    if(X_max >= Y_max && X_max >= M_max){
+		Score_Matrix[i][j].value = X_max;
+		Score_Matrix[i][j].direction = x;
+	    }
+	    else if(Y_max >= X_max && Y_max >= M_max){
+		    Score_Matrix[i][j].value = Y_max;
+		    Score_Matrix[i][j].direction = y;
+		 }
+		 else if(M_max >= X_max && M_max >= Y_max){
+			 Score_Matrix[i][j].value = M_max;
+			 Score_Matrix[i][j].direction = m;
+		 }
+
+
+	} 
+      }
                  
         //A = Score_Matrix[0][0].value;
 	//seq1_out[A] = 'Y';
-
+/*Maximum Score in SW matrix*/
 	sw_entry sw_max;
 	int val;
 
@@ -189,7 +187,42 @@ __global__ void read_align(char *seq1, char *seq2, char *seq1_out, char *seq2_ou
           }
 	//A = Score_Matrix[0][0].value;
         //seq2_out[B] = 'Y';
-       //traceback(Score_Matrix, M, &seq1[seq_i], &seq2[seq_i], &seq1_out[seq_i], &seq2_out[seq_i], &A , &B, &S_I);
+   /*Traceback function*/
+     DP_dir SW_dir;
+     char c1, c2;
+     
+     //seq1_out[L] = 'X';
+     //seq2_out[L] = 'X';
+     //seq1_out[i] = 'X';
+     //seq2_out[J] = 'X'; 
+     
+     for(int n = L; n >=0; --n){/*
+	if(M[A][B]!=0 && n <= s_idx){  
+       		SW_dir = Score_Matrix[A][B].direction;   
+    		if(SW_dir == m){
+                	c1 = seq1[A];
+    			c2 = seq2[B];
+    			A = A-1;
+    			B = B-1;
+    		} else if(SW_dir == x){
+    		        c2 = '-'; 
+    		   	c1 = seq1[I];
+    		   	A = A-1;
+    			}
+    	       		else if(SW_dir == y){
+    	       	      		c1 = '-';
+    	       	      		c2 = seq2[J];
+    	       	      		B = B-1;
+    	            		}
+		seq1_out[n] = c1;
+	        seq2_out[n] = c2;
+       } 
+	 else if((M[A][B] != 0 && n > S_I)  || (M[A][B] == 0 && n <= S_I)){
+		seq1_out[n] = 'X';
+	        seq2_out[n] = 'X';
+	     }	*/
+     
+     }
              
 
     }
