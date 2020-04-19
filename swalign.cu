@@ -34,21 +34,22 @@ __host__ __device__ void init_DP(int M[][L+1], int X[][L+1], int Y[][L+1]){
 	}
 }
 
-__host__ __device__ sw_entry compute_DP(int seq1_i, int seq2_i, char *seq1, char *seq2, int M[][L+1], int X[][L+1], int Y[][L+1]){
+__host__ __device__ void compute_DP(sw_entry SW[][L+1], char *seq1, char *seq2, int M[][L+1], int X[][L+1], int Y[][L+1]){
     int M_max =0, X_max, Y_max;
     int M_x, M_y, M_m;
     int match_score;
-    sw_entry SW_i_j;
-    //printf("BEFORE\n");
-    //printf("Index i:%d, j:%d, seq1:%c, seq2:%c, score:%d, dir:%d\n",seq1_i, seq2_i, seq1[seq1_i], seq2[seq2_i], SW_i_j.value, SW_i_j.direction);
-   if(seq1[seq1_i] == seq2[seq2_i])
+    sw_entry SW_ij;
+    
+   for(int i = 1; i < L+1; i++){
+	  for(int j = 1; j <L+1; j++){
+   if(seq1[i] == seq2[j])
    	match_score = match;
    else
    	match_score = mismatch;
 
-   M_m = M[seq1_i-1][seq2_i-1] + match_score;
-   M_x = X[seq1_i-1][seq2_i-1] + match_score;
-   M_y = Y[seq1_i-1][seq2_i-1] + match_score;
+   M_m = M[i-1][j-1] + match_score;
+   M_x = X[i-1][j-1] + match_score;
+   M_y = Y[i-1][j-1] + match_score;
    
 	if(M_m >= M_x && M_m >= M_y && M_m > 0) 
 		M_max = M_m;
@@ -57,36 +58,38 @@ __host__ __device__ sw_entry compute_DP(int seq1_i, int seq2_i, char *seq1, char
 	     else if(M_y >= M_m && M_y >= M_x && M_y > 0)
 		     M_max = M_y;
 
-	M[seq1_i][seq2_i] =  M_max;
+	M[i][j] =  M_max;
      
-    Y_max = gap_extn + Y[seq1_i][seq2_i-1];
-    if(penalty + M[seq1_i][seq2_i-1] > Y_max)
-    	Y_max = M[seq1_i][seq2_i-1] + penalty;
+    Y_max = gap_extn + Y[i][j-1];
+    if(penalty + M[i][j-1] > Y_max)
+    	Y_max = M[i][j-1] + penalty;
 
-    Y[seq1_i][seq2_i] = Y_max;
+    Y[i][j] = Y_max;
      
-    X_max = gap_extn + X[seq1_i-1][seq2_i];
-    if(penalty + M[seq1_i-1][seq2_i] > X_max)
-    	X_max = M[seq1_i-1][seq2_i] + penalty;
+    X_max = gap_extn + X[i-1][j];
+    if(penalty + M[i-1][j] > X_max)
+    	X_max = M[i-1][j] + penalty;
 
-    X[seq1_i][seq2_i] = X_max;
+    X[i][j] = X_max;
     
     
     if(X_max >= Y_max && X_max >= M_max){
-    	SW_i_j.value = X_max;
-    	SW_i_j.direction = x;
+    	SW_ij.value = X_max;
+    	SW_ij.direction = x;
     }
     else if(Y_max >= X_max && Y_max >= M_max){
-            SW_i_j.value = Y_max;
-    	    SW_i_j.direction = y;
+            SW_ij.value = Y_max;
+    	    SW_ij.direction = y;
          }
          else if(M_max >= X_max && M_max >= Y_max){
-		 SW_i_j.value = M_max;
-		 SW_i_j.direction = m;
+		 SW_ij.value = M_max;
+		 SW_ij.direction = m;
 	 }
+
+    SW[i][j] = SW_ij;	 
     //printf("AFTER\n");
     //printf("Index i:%d, j:%d, seq1:%c, seq2:%c, score:%d, dir:%d\n",seq1_i, seq2_i, seq1[seq1_i], seq2[seq2_i], SW_i_j.value, SW_i_j.direction);
-    return SW_i_j;
+   }  }
 
 }
 
@@ -139,7 +142,7 @@ __global__ void read_align(char *seq1, char *seq2, char *seq1_out, char *seq2_ou
    int A, B, S_I;
 
    int index = blockIdx.x * blockDim.x +threadIdx.x;
-
+   
    if(index < no_seq)
    {   
         seq_i = index * (L+1);
@@ -158,22 +161,22 @@ __global__ void read_align(char *seq1, char *seq2, char *seq1_out, char *seq2_ou
             for(int i=1; i<L+1; i++){
               Score_Matrix[i][0].value = 0;
             }
-        
-        for(int i=1; i<L+1; i++){
-            for(int j=1; j<L+1; j++){
-                Score_Matrix[i][j] = compute_DP(i,j, &seq1[seq_i], &seq2[seq_i], M, X, Y);
-            }
-        }
-       
-       
+        A = M[0][0];
+        seq1_out[A] = 'Z';
+
+        compute_DP(Score_Matrix, seq1, seq2, &seq_i, M, X, Y);
+                 
+        //A = Score_Matrix[0][0].value;
+	//seq1_out[A] = 'Y';
+
 	sw_entry sw_max;
 	int val;
 
-	sw_max = SW[0][0];
+	sw_max = Score_Matrix[0][0];
 	for(int i=0; i < L+1; i++){
 		for(int j=0; j < L+1; j++){
-			val = SW[i][j].value;
-			if(val >= sw_max.value){
+			val = Score_Matrix[i][j].value;
+			if(val > sw_max.value){
 				sw_max.value = val;
 				A = i;
 				B = j;
@@ -184,9 +187,9 @@ __global__ void read_align(char *seq1, char *seq2, char *seq1_out, char *seq2_ou
 			}
 		}
           }
-	 
-       
-        traceback(Score_Matrix, M, &seq1[seq_i], &seq2[seq_i], &seq1_out[seq_i], &seq2_out[seq_i], &A , &B, &S_I);
+	//A = Score_Matrix[0][0].value;
+        //seq2_out[B] = 'Y';
+       //traceback(Score_Matrix, M, &seq1[seq_i], &seq2[seq_i], &seq1_out[seq_i], &seq2_out[seq_i], &A , &B, &S_I);
              
 
     }
@@ -250,6 +253,8 @@ int main(int argc, char *argv[]){
     seq1[0] = '-';
     seq2[0] = '-';
     fread(&seq1[1], sizeof(char), ((L+1)*(no_seq-1)+ L), input1);
+    seq2[0] = '-';
+    fread(&seq1[1], sizeof(char), ((L+1)*(no_seq-1)+ L), input1);
     fread(&seq2[1], sizeof(char), ((L+1)*(no_seq-1)+ L), input2);
      
    // printf("First char of seq1:%c, seq2:%c, last char of seq1:%c, seq2:%c\n", seq1[1], seq2[1], seq1[L], seq2[L]);
@@ -305,6 +310,4 @@ int main(int argc, char *argv[]){
     free(seq2);
     free(seq1_out);
     free(seq2_out);
-
-    return 0;
 }
