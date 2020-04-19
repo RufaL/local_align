@@ -90,40 +90,13 @@ __host__ __device__ sw_entry compute_DP(int seq1_i, int seq2_i, char *seq1, char
 
 }
 
-//__device__ sw_entry sw_max;
-//__device__ int idx_i, idx_j;
-__host__ __device__ void MaxScore(sw_entry SW[][L+1], int *I, int *J, int *s_idx){
-	sw_entry sw_max;
-	int val;
-        int val_i, val_j, val_s;
-
-	sw_max = SW[0][0];
-	for(int i=0; i < L+1; i++){
-		for(int j=0; j < L+1; j++){
-			val = SW[i][j].value;
-			if(val >= sw_max.value){
-				sw_max.value = val;
-				*I = i;//val_i = i;
-				*J = j;//val_j = j;
-				if(i >= j)//if(val_i >= val_j )
-				  *s_idx = i;//val_s = val_i;
-				else
-				  *s_idx = j;//val_s = val_i;
-			}
-		}
-          }
-	  //*I = val_i;
-	  //*J = val_j;
-	  //*s_idx = val_s;
-    //printf("Highest score index i:%d, j:%d and score:%d\n",idx_i, idx_j, sw_max.value); 
-}
-
-__host__ __device__ void traceback(sw_entry SW[][L+1], int M[][L+1], char *seq1, char *seq2, char *seq1_out, char *seq2_out, int *I, int *J, int *s_idx){
+__host__ __device__ void traceback(sw_entry SW[][L+1], int M[][L+1], char *seq1, char *seq2, char *seq1_out, char *seq2_out, int *i, int *j, int *s_i){
      DP_dir SW_dir;
      char c1, c2;
-     
-     //seq1_out[s_idx+1] = '\0';
-     //seq2_out[s_idx+1] = '\0';
+     int I, J, s_idx;
+     I = *i;
+     J = *j;
+     s_idx = *s_i;
      //seq1_out[L] = 'X';
      //seq2_out[L] = 'X';
      //seq1_out[i] = 'X';
@@ -149,8 +122,6 @@ __host__ __device__ void traceback(sw_entry SW[][L+1], int M[][L+1], char *seq1,
     	            		}
 		//seq1_out[n] = c1;
 	        //seq2_out[n] = c2;
-      //printf("Score of M: %d\n", M[I][J]);
-      //printf("Index I:%d, J:%d, char in seq1_out:%c, seq2_out:%c\n", I, J, seq1_out[s_idx], seq2_out[s_idx]);
        } 
 	 else if((M[I][J] != 0 && n > s_idx)  || (M[I][J] == 0 && n <= s_idx)){
 		seq1_out[n] = 'X';
@@ -193,10 +164,29 @@ __global__ void read_align(char *seq1, char *seq2, char *seq1_out, char *seq2_ou
                 Score_Matrix[i][j] = compute_DP(i,j, &seq1[seq_i], &seq2[seq_i], M, X, Y);
             }
         }
-        MaxScore(Score_Matrix, &A, &B, &S_I);
-        //seq1_out[A] = 'X';
-	//seq2_out[B] = 'X';
-        //traceback(Score_Matrix, M, &seq1[seq_i], &seq2[seq_i], &seq1_out[seq_i], &seq2_out[seq_i], &A , &B, &S_I);
+       
+       
+	sw_entry sw_max;
+	int val;
+
+	sw_max = SW[0][0];
+	for(int i=0; i < L+1; i++){
+		for(int j=0; j < L+1; j++){
+			val = SW[i][j].value;
+			if(val >= sw_max.value){
+				sw_max.value = val;
+				A = i;
+				B = j;
+				if(i >= j)
+				  S_I = i;
+				else
+				  S_I = j;
+			}
+		}
+          }
+	 
+       
+        traceback(Score_Matrix, M, &seq1[seq_i], &seq2[seq_i], &seq1_out[seq_i], &seq2_out[seq_i], &A , &B, &S_I);
              
 
     }
