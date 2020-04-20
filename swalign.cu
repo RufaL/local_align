@@ -198,29 +198,29 @@ __global__ void read_align(char *seq1, char *seq2, char *seq1_out, char *seq2_ou
 	if(M[A][B]!=0 && n <= S_I){  
        		SW_dir = Score_Matrix[A][B].direction;   
     		if(SW_dir == m){
-                	c1 = seq1[A];
-    			c2 = seq2[B];
+                	c1 = seq1[A + seq_i];
+    			c2 = seq2[B + seq_i];
     			A = A-1;
     			B = B-1;
     		} else if(SW_dir == x){
     		        c2 = '-'; 
-    		   	c1 = seq1[A];
+    		   	c1 = seq1[A + seq_i];
     		   	A = A-1;
     			}
     	       		else if(SW_dir == y){
     	       	      		c1 = '-';
-    	       	      		c2 = seq2[B];
+    	       	      		c2 = seq2[B + seq_i];
     	       	      		B = B-1;
     	            		}
-		seq1_out[n] = c1;
-	        seq2_out[n] = c2;
+		seq1_out[n + seq_i] = c1;
+	        seq2_out[n + seq_i] = c2;
        } 
 	 else if(M[A][B] == 0  && n <=S_I){//((M[A][B] != 0 && n > S_I)  || (M[A][B] == 0 && n <= S_I)){
-		seq1_out[n] = 'X';
-	        seq2_out[n] = 'X';
+		seq1_out[n + seq_i] = '.';
+	        seq2_out[n + seq_i] = '.';
 	     }else if(M[A][B] !=0 && n >S_I){
-		seq1_out[n] = ' ';
-	        seq2_out[n] = ' ';
+		seq1_out[n + seq_i] = '*';
+	        seq2_out[n + seq_i] = '*';
 	     }	
      
      }
@@ -259,6 +259,7 @@ int main(int argc, char *argv[]){
     char *seq1_out, *seq2_out;
     char line[] = "Output seq 1:";
     char line1[] = "Output seq 2:";
+    char head[] = "Sequence pair";
     int l_size = strlen(line);
     size_t  s_size = no_seq * (L+1) * sizeof(char) ;
    
@@ -301,7 +302,7 @@ int main(int argc, char *argv[]){
     cudaMemcpy(seq2_d, seq2, s_size, cudaMemcpyHostToDevice);
    
     /*Perform alignment at Device*/
-    read_align<<<no_seq,1>>>(seq1_d, seq2_d, seq1_out_d, seq2_out_d);
+    read_align<<<1,no_seq>>>(seq1_d, seq2_d, seq1_out_d, seq2_out_d);
   
     cudaDeviceSynchronize();
    
@@ -313,14 +314,16 @@ int main(int argc, char *argv[]){
     //printf("Strlen of seq1_out:%d, seq2_out:%d\n",strlen(seq1_out), strlen(seq2_out));
     /* Write result to file */
     for(int m=0; m < no_seq; m++){
+	fwrite(head, sizeof(char), strlen(head), output);
+        fprintf(output, "%d\n", m);	
         fwrite(line, sizeof(char), strlen(line), output);
-        fwrite(&seq1[m*(L+1)], sizeof(char), L+1, output);
-        fprintf(output,"\n");
+        //fwrite(&seq1[m*(L+1)], sizeof(char), L+1, output);
+        //fprintf(output,"\n");
         fwrite(&seq1_out[m*(L+1)], sizeof(char), L+1, output);
         fprintf(output,"\n");
         fwrite(line1, sizeof(char), strlen(line1), output);
-        fwrite(&seq2[m*(L+1)], sizeof(char), L+1, output);
-        fprintf(output, "\n");
+        //fwrite(&seq2[m*(L+1)], sizeof(char), L+1, output);
+        //fprintf(output, "\n");
         fwrite(&seq2_out[m*(L+1)], sizeof(char), L+1, output);
         if(m != no_seq-1)
           fprintf(output,"\n");
