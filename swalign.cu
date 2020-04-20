@@ -34,48 +34,6 @@ __host__ __device__ void init_DP(int M[][L+1], int X[][L+1], int Y[][L+1]){
 	}
 }
 
-
-__host__ __device__ void traceback(sw_entry SW[][L+1], int M[][L+1], char *seq1, char *seq2, char *seq1_out, char *seq2_out, int *i, int *j, int *s_i){
-     DP_dir SW_dir;
-     char c1, c2;
-     int I, J, s_idx;
-     I = *i;
-     J = *j;
-     s_idx = *s_i;
-     //seq1_out[L] = 'X';
-     //seq2_out[L] = 'X';
-     //seq1_out[i] = 'X';
-     //seq2_out[J] = 'X'; 
-     
-     for(int n = L; n >=0; --n){/*
-	if(M[I][J]!=0 && n <= s_idx){  
-       		SW_dir = SW[I][J].direction;   
-    		if(SW_dir == m){
-                	c1 = seq1[I];//seq1_out[m] = seq1[I];
-    			c2 = seq2[J];//seq2_out[m] = seq2[J];
-    			I = I-1;
-    			J = J-1;
-    		} else if(SW_dir == x){
-    		        c2 = '-'; //seq2_out[m] = '-';
-    		   	c1 = seq1[I];//seq1_out[m] = seq1[I];
-    		   	I = I-1;
-    			}
-    	       		else if(SW_dir == y){
-    	       	      		c1 = '-';//seq1_out[m] = '-';
-    	       	      		c2 = seq2[J];//seq2_out[m] = seq2[J];
-    	       	      		J = J-1;
-    	            		}
-		//seq1_out[n] = c1;
-	        //seq2_out[n] = c2;
-       } 
-	 else if((M[I][J] != 0 && n > s_idx)  || (M[I][J] == 0 && n <= s_idx)){
-		seq1_out[n] = 'X';
-	        seq2_out[n] = 'X';
-	     }	*/
-     
-     }
-}
-
 __global__ void read_align(char *seq1, char *seq2, char *seq1_out, char *seq2_out){
     
    int seq_i;
