@@ -103,27 +103,27 @@ __global__ void read_align(char *seq1, char *seq2, char *seq1_out, char *seq2_ou
             for(int i=1; i<L+1; i++){
               Score_Matrix[i][0].value = 0;
             }
-        A = M[0][0];
-        seq1_out[A] = 'Z';
+        //A = M[0][0];
+       //seq1_out[A] = 'Z';
 	   
  /*Compute DP matrices */
     int M_max =0, X_max, Y_max;
     int M_x, M_y, M_m;
     int match_score;
-    int i, j;
+    int si, sj;
 
     for(int I = 1; I < L+1; I++){
        for(int J = 1; J <L+1; J++){
-			  i = I + seq_i;
-			  j = J + seq_i;
-	   if(seq1[i] == seq2[j])
+			  si = I + seq_i;
+			  sj = J + seq_i;
+	   if(seq1[si] == seq2[sj])
 		match_score = match;
 	   else
 		match_score = mismatch;
-
-	   M_m = M[i-1][j-1] + match_score;
-	   M_x = X[i-1][j-1] + match_score;
-	   M_y = Y[i-1][j-1] + match_score;
+           
+	   M_m = M[I-1][J-1] + match_score;
+	   M_x = X[I-1][J-1] + match_score;
+	   M_y = Y[I-1][J-1] + match_score;
 
 		if(M_m >= M_x && M_m >= M_y && M_m > 0) 
 			M_max = M_m;
@@ -132,41 +132,42 @@ __global__ void read_align(char *seq1, char *seq2, char *seq1_out, char *seq2_ou
 		     else if(M_y >= M_m && M_y >= M_x && M_y > 0)
 			     M_max = M_y;
 
-		M[i][j] =  M_max;
+		M[I][J] =  M_max;
+         
+	    Y_max = gap_extn + Y[I][J-1];
+	    if(penalty + M[I][J-1] > Y_max)
+		Y_max = M[I][J-1] + penalty;
 
-	    Y_max = gap_extn + Y[i][j-1];
-	    if(penalty + M[i][j-1] > Y_max)
-		Y_max = M[i][j-1] + penalty;
+	    Y[I][J] = Y_max;
 
-	    Y[i][j] = Y_max;
+	    X_max = gap_extn + X[I-1][J];
+	    if(penalty + M[I-1][J] > X_max)
+		X_max = M[I-1][J] + penalty;
 
-	    X_max = gap_extn + X[i-1][j];
-	    if(penalty + M[i-1][j] > X_max)
-		X_max = M[i-1][j] + penalty;
-
-	    X[i][j] = X_max;
+	    X[I][J] = X_max;
 
 
 	    if(X_max >= Y_max && X_max >= M_max){
-		Score_Matrix[i][j].value = X_max;
-		Score_Matrix[i][j].direction = x;
+		Score_Matrix[I][J].value = X_max;
+		Score_Matrix[I][J].direction = x;
 	    }
 	    else if(Y_max >= X_max && Y_max >= M_max){
-		    Score_Matrix[i][j].value = Y_max;
-		    Score_Matrix[i][j].direction = y;
+		    Score_Matrix[I][J].value = Y_max;
+		    Score_Matrix[I][J].direction = y;
 		 }
 		 else if(M_max >= X_max && M_max >= Y_max){
-			 Score_Matrix[i][j].value = M_max;
-			 Score_Matrix[i][j].direction = m;
+			 Score_Matrix[I][J].value = M_max;
+			 Score_Matrix[I][J].direction = m;
 		 }
-
-
+     
+         
 	} 
       }
-                 
+                
         //A = Score_Matrix[0][0].value;
 	//seq1_out[A] = 'Y';
 /*Maximum Score in SW matrix*/
+  
 	sw_entry sw_max;
 	int val;
 
@@ -186,18 +187,15 @@ __global__ void read_align(char *seq1, char *seq2, char *seq1_out, char *seq2_ou
 		}
           }
 	//A = Score_Matrix[0][0].value;
-        //seq2_out[B] = 'Y';
+        //seq2_out[B] = 'W';
+	
    /*Traceback function*/
+    
      DP_dir SW_dir;
-     char c1, c2;
+     char c1, c2; 
      
-     //seq1_out[L] = 'X';
-     //seq2_out[L] = 'X';
-     //seq1_out[i] = 'X';
-     //seq2_out[J] = 'X'; 
-     
-     for(int n = L; n >=0; --n){/*
-	if(M[A][B]!=0 && n <= s_idx){  
+     for(int n = L; n >=0; --n){
+	if(M[A][B]!=0 && n <= S_I){  
        		SW_dir = Score_Matrix[A][B].direction;   
     		if(SW_dir == m){
                 	c1 = seq1[A];
@@ -206,21 +204,24 @@ __global__ void read_align(char *seq1, char *seq2, char *seq1_out, char *seq2_ou
     			B = B-1;
     		} else if(SW_dir == x){
     		        c2 = '-'; 
-    		   	c1 = seq1[I];
+    		   	c1 = seq1[A];
     		   	A = A-1;
     			}
     	       		else if(SW_dir == y){
     	       	      		c1 = '-';
-    	       	      		c2 = seq2[J];
+    	       	      		c2 = seq2[B];
     	       	      		B = B-1;
     	            		}
 		seq1_out[n] = c1;
 	        seq2_out[n] = c2;
        } 
-	 else if((M[A][B] != 0 && n > S_I)  || (M[A][B] == 0 && n <= S_I)){
+	 else if(M[A][B] == 0  && n <=S_I){//((M[A][B] != 0 && n > S_I)  || (M[A][B] == 0 && n <= S_I)){
 		seq1_out[n] = 'X';
 	        seq2_out[n] = 'X';
-	     }	*/
+	     }else if(M[A][B] !=0 && n >S_I){
+		seq1_out[n] = ' ';
+	        seq2_out[n] = ' ';
+	     }	
      
      }
              
@@ -284,8 +285,6 @@ int main(int argc, char *argv[]){
 
     /* Load data from textfile */
     seq1[0] = '-';
-    seq2[0] = '-';
-    fread(&seq1[1], sizeof(char), ((L+1)*(no_seq-1)+ L), input1);
     seq2[0] = '-';
     fread(&seq1[1], sizeof(char), ((L+1)*(no_seq-1)+ L), input1);
     fread(&seq2[1], sizeof(char), ((L+1)*(no_seq-1)+ L), input2);
