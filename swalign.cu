@@ -296,7 +296,6 @@ int main(int argc, char *argv[]){
     fclose(input2);
     fflush(stdout);
     
-    //printf("Strlen of seq1:%d, seq2:%d\n", strlen(seq1), strlen(seq2));
     /*Copy data from Host to Device*/
     cudaMemcpy(seq1_d, seq1, s_size, cudaMemcpyHostToDevice);
     cudaMemcpy(seq2_d, seq2, s_size, cudaMemcpyHostToDevice);
@@ -311,7 +310,7 @@ int main(int argc, char *argv[]){
     cudaMemcpy(seq2_out, seq2_out_d, s_size, cudaMemcpyDeviceToHost);
     cudaMemcpy(seq1, seq1_d, s_size, cudaMemcpyDeviceToHost);
     cudaMemcpy(seq2, seq2_d, s_size, cudaMemcpyDeviceToHost);
-    //printf("Strlen of seq1_out:%d, seq2_out:%d\n",strlen(seq1_out), strlen(seq2_out));
+    
     /* Write result to file */
     for(int m=0; m < no_seq; m++){
 	fwrite(head, sizeof(char), strlen(head), output);
