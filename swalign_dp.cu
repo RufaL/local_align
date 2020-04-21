@@ -36,33 +36,6 @@ __host__ __device__ void init_DP(int M[][L+1], int X[][L+1], int Y[][L+1]){
 	}
 }
 
-__host__ __device__ void packing(char *sq1, uint32_t *seq1){
-    int p, j=0;
-    seq1[0] = 0;
-    for(int i=0; i<L+1; i++){/*
-	p = i%8;    
-        switch(sq1[i]){
-		case 'A': seq1[j] |= (sq1[i] & 0x0F) << 4*p;
-			  break;
-	        case 'G': seq1[j] |= (sq1[i] & 0x0F) << 4*p;
-			  break;
-		case 'T': seq1[j] |= (sq1[i] & 0x0F) << 4*p;
-			  break;
-		case 'C': seq1[j] |= (sq1[i] & 0x0F) << 4*p;
-			  break;
-		case '\n': seq1[j] |= (sq1[i] & 0x0F) << 4*p;
-			   break;
-		case '-': seq1[j] |= (sq1[i] & 0x0F) << 4*p;
-			  break;
-	}
-        if(p==7){
-	  ++j;
-	  seq1[j] = 0;
-	}  */
-    }
-
-}
-
 __host__ __device__ void unpacking(uint32_t *s1, char *seq1_out){
     uint8_t c;
     int m=0;
@@ -127,6 +100,7 @@ __global__ void read_align(char *sq1, char *sq2, char *seq1_out, char *seq2_out)
         /*data packing*/
 	    int p, j=0;
 	    seq1[0] = 0x0;
+	    seq2[0] = 0x0;
 	    for(int i=0; i<L+1; i++){
 		p = i%8;    
 		switch(sq1[i]){
@@ -143,13 +117,28 @@ __global__ void read_align(char *sq1, char *sq2, char *seq1_out, char *seq2_out)
 			case '-': seq1[j] |= (sq1[i] & 0x0F) << 4*p;
 				  break;
 		}
+		switch(sq2[i]){
+			case 'A': seq2[j] |= (sq2[i] & 0x0F) << 4*p;
+				  break;
+			case 'G': seq2[j] |= (sq2[i] & 0x0F) << 4*p;
+				  break;
+			case 'T': seq2[j] |= (sq2[i] & 0x0F) << 4*p;
+				  break;
+			case 'C': seq2[j] |= (sq2[i] & 0x0F) << 4*p;
+				  break;
+			case '\n': seq2[j] |= (sq2[i] & 0x0F) << 4*p;
+				   break;
+			case '-': seq2[j] |= (sq2[i] & 0x0F) << 4*p;
+				  break;
+		}
 		if(p==7){
 		  ++j;
 		  seq1[j] = 0;
+		  seq2[j] = 0;
 		} 
 	    }
-        //packing(sq2, seq2);
-        
+      
+      /*Initializing score martix*/  
             Score_Matrix[0][0].value = 0;
             for(int j=1; j<L+1; j++){
               Score_Matrix[0][j].value = 0;
