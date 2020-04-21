@@ -16,6 +16,8 @@
 
 /*const int for penalty*/
 const int penalty = gap_open + gap_extn;    
+#define size ((L+1)/8 +1)
+
 
 __host__ __device__ void init_DP(int M[][L+1], int X[][L+1], int Y[][L+1]){
 	M[0][0] = 0;
@@ -108,22 +110,23 @@ __global__ void read_align(char *sq1, char *sq2, char *seq1_out, char *seq2_out)
    sw_entry Score_Matrix[L+1][L+1];
    int M[L+1][L+1], X[L+1][L+1], Y[L+1][L+1];  //DP matrices
    int A, B, S_I;
-   uint32_t *s1_out, *s2_out, *seq1, *seq2;
+   uint32_t *s1_out, *s2_out;
+
+   
+   uint32_t  seq1[size], seq2[size];
 
    int index = blockIdx.x * blockDim.x +threadIdx.x;
    
    if(index < no_seq)
    {   
-        seq_i = index * (L+1)/8;
-        if((L+1)%8 !=0 )
-            seq_i = seq_i + index;
+        seq_i = index * size;
         	    
         /*Start scoring*/
        
         init_DP(M, X, Y);
         /*data packing*/
 	    int p, j=0;
-	    seq1[0] = 0;
+	    seq1[0] = 0x0;
 	    for(int i=0; i<L+1; i++){
 		p = i%8;    
 		switch(sq1[i]){
@@ -143,7 +146,7 @@ __global__ void read_align(char *sq1, char *sq2, char *seq1_out, char *seq2_out)
 		if(p==7){
 		  ++j;
 		  seq1[j] = 0;
-		}  
+		} 
 	    }
         //packing(sq2, seq2);
         
