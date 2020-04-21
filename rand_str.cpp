@@ -8,7 +8,7 @@
  #include "stdint.h"
  #include "time.h"
 
- #define L 100
+ #define L 150
  #define n_seq 10
 
  int main(){
