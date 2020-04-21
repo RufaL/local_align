@@ -221,9 +221,13 @@ int main(int argc, char *argv[]){
     char head[] = "Sequence pair";
     int l_size = strlen(line);
     size_t  s_size = no_seq * (L+1) * sizeof(char) ;
-    cudaEvent_t start, stop;
+    cudaEvent_t start, stop, start1, stop1, start2, stop2;
     cudaEventCreate(&start);
+    cudaEventCreate(&start1);
+    cudaEventCreate(&start2);
     cudaEventCreate(&stop);
+    cudaEventCreate(&stop1);
+    cudaEventCreate(&stop2);
    
 
     /*Dynamic memory allocation at Host*/
@@ -257,15 +261,29 @@ int main(int argc, char *argv[]){
     fclose(input1);
     fclose(input2);
     fflush(stdout);
-    
+    float milliseconds;
     /*Copy data from Host to Device*/
+    cudaEventRecord(start1);	
     cudaMemcpy(seq1_d, seq1, s_size, cudaMemcpyHostToDevice);
     cudaMemcpy(seq2_d, seq2, s_size, cudaMemcpyHostToDevice);
+    cudaEventRecord(stop1);
+	
+    cudaEventSynchronize(stop1);
+	
+    milliseconds = 0;
+    cudaEventElapsedTime(&milliseconds, start1, stop1);
+    printf("Time in H to D:%4.0f\n", milliseconds)
    
     cudaEventRecord(start);	
     /*Perform alignment at Device*/
     read_align<<<1,no_seq>>>(seq1_d, seq2_d, seq1_out_d, seq2_out_d);
-    cudaEventRecord(start);
+    cudaEventRecord(stop);
+	
+    cudaEventSynchronize(stop);
+	
+    milliseconds = 0;
+    cudaEventElapsedTime(&milliseconds, start, stop);
+    printf("Time in kernel:%4.0f\n", milliseconds);	
   
     cudaDeviceSynchronize();
    
@@ -275,10 +293,10 @@ int main(int argc, char *argv[]){
     cudaMemcpy(seq1, seq1_d, s_size, cudaMemcpyDeviceToHost);
     cudaMemcpy(seq2, seq2_d, s_size, cudaMemcpyDeviceToHost);
 	
-    cudaEventSynchronize(stop);
-    float milliseconds = 0;
-    cudaEventElapsedTime(&milliseconds, start, stop);
-    printf("Time elapsed in GPU:%4.0f\n", milliseconds);
+    cudaEventSynchronize(stop2);
+    milliseconds = 0;
+    cudaEventElapsedTime(&milliseconds, start2, stop2);
+    printf("Time in D to H:%4.0f\n", milliseconds);
     
     /* Write result to file */
     for(int m=0; m < no_seq; m++){
