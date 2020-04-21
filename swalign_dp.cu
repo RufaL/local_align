@@ -34,65 +34,65 @@ __host__ __device__ void init_DP(int M[][L+1], int X[][L+1], int Y[][L+1]){
 	}
 }
 
-__host__ __device__ packing(uint32_t *seq1){
-    uint32_t s1_t;
-    uint8_t s1_l, s1_h, s2_l, s2_h;
-    int j=0;
-    for(int i=0; i<strlen(seq1); i = i+2){
-        s1_l = seq1[i] & (0x0000_000F << 8);
-        s1_l = s1_l | (seq1[i] & 0x0000_000F);
-        s1_h = seq1[i] & (0x000F_0000 << 8);
-        s1_h = s1_h | (seq1[i] & 0x000F_0000);
-
-        s1_t = s1_l | (s1_h << 8);
-
-        s2_l = seq1[i+1] & (0x0000_000F << 8);
-        s2_l = s2_l | (seq1[i+1] & 0x0000_000F);
-        s2_h = seq1[i] & (0x000F_0000 << 8);
-        s2_h = s2_h | (seq1[i+1] & 0x000F_0000);
-
-        s1_t = s1_t | ((s2_l | (s2_h << 8)) <<16);
-        seq1[i] = 0;
-        seq1[i+1] = 0;
-        seq1[j] = s1_t;
-        j++;
-
+__host__ __device__ void packing(char *sq1, uint32_t *seq1){
+    int p, j=0;
+    seq1[0] = 0;
+    for(int i=0; i<L+1; i++){/*
+	p = i%8;    
+        switch(sq1[i]){
+		case 'A': seq1[j] |= (sq1[i] & 0x0F) << 4*p;
+			  break;
+	        case 'G': seq1[j] |= (sq1[i] & 0x0F) << 4*p;
+			  break;
+		case 'T': seq1[j] |= (sq1[i] & 0x0F) << 4*p;
+			  break;
+		case 'C': seq1[j] |= (sq1[i] & 0x0F) << 4*p;
+			  break;
+		case '\n': seq1[j] |= (sq1[i] & 0x0F) << 4*p;
+			   break;
+		case '-': seq1[j] |= (sq1[i] & 0x0F) << 4*p;
+			  break;
+	}
+        if(p==7){
+	  ++j;
+	  seq1[j] = 0;
+	}  */
     }
 
 }
 
-__host__ __device__ unpacking(uint32_t *s1, char *seq1_out){
+__host__ __device__ void unpacking(uint32_t *s1, char *seq1_out){
     uint8_t c;
     int m=0;
     for(int i=0; s1[i] !=0; i++){
         for(int j=0; j<8; j++){
-           c = s1[i] & (0x0000_000F << 4*j);
+           c = (s1[i] >> 4*j) & 0x000F;
            switch(c){
-            case 0b0001: { seq1_out[m] = 'A';
+            case 0x1: { seq1_out[m] = 'A';
                            m++;
                           }
                           break;
-            case 0b0111: { seq1_out[m] = 'G';
+            case 0x7: { seq1_out[m] = 'G';
                            m++;
                           }
                           break;
-            case 0b0100: { seq1_out[m] = 'T';
+            case 0x4: { seq1_out[m] = 'T';
                            m++;
                           }
                           break;
-            case 0b0011: { seq1_out[m] = 'C';
+            case 0x3: { seq1_out[m] = 'C';
                            m++;
                           }
                           break;
-            case 0b1010: { seq1_out[m] = '\n';
+            case 0xA: { seq1_out[m] = '\n';
                            m++;
                           }
                           break;
-            case 0b1110: { seq1_out[m] = '-';
+            case 0xE: { seq1_out[m] = '-';
                            m++;
                           }
                           break;
-            case 0b1111: { seq1_out[m] = '.';
+            case 0xF: { seq1_out[m] = '.';
                            m++;
                           }
                           break;
@@ -102,13 +102,13 @@ __host__ __device__ unpacking(uint32_t *s1, char *seq1_out){
     }
 }
 
-__global__ void read_align(uint32_t *seq1, uint32_t *seq2, char *seq1_out, char *seq2_out){
+__global__ void read_align(char *sq1, char *sq2, char *seq1_out, char *seq2_out){
     
    int seq_i;
    sw_entry Score_Matrix[L+1][L+1];
    int M[L+1][L+1], X[L+1][L+1], Y[L+1][L+1];  //DP matrices
    int A, B, S_I;
-   uint32_t *s1_out, *s2_out;
+   uint32_t *s1_out, *s2_out, *seq1, *seq2;
 
    int index = blockIdx.x * blockDim.x +threadIdx.x;
    
@@ -117,12 +117,13 @@ __global__ void read_align(uint32_t *seq1, uint32_t *seq2, char *seq1_out, char 
         seq_i = index * (L+1)/8;
         if((L+1)%8 !=0 )
             seq_i = seq_i + index;
+        	    
         /*Start scoring*/
        
         init_DP(M, X, Y);
 
-        packing(seq1);
-        packing(seq2);
+        packing(sq1, seq1);
+        //packing(sq2, seq2);
         
             Score_Matrix[0][0].value = 0;
             for(int j=1; j<L+1; j++){
@@ -131,26 +132,27 @@ __global__ void read_align(uint32_t *seq1, uint32_t *seq2, char *seq1_out, char 
             for(int i=1; i<L+1; i++){
               Score_Matrix[i][0].value = 0;
             }
-        //A = M[0][0];
-       //seq1_out[A] = 'Z';
+       A = M[0][0];
+       seq1_out[A] = 'Z';
 	   
  /*Compute DP matrices */
+ /*     
     int M_max =0, X_max, Y_max;
     int M_x, M_y, M_m;
     int match_score;
     int si, sj, count=0;
     int r, c;
+    uint8_t e1, e2;
 
 
-
-    for(int I = 1; I < L+1; I++){
-       for(int J = 1; J <L+1; J++){
-			r = I/8 + seq_i;
+    for(int I = 1; I < L+1; I=I+8){
+       for(int J = 1; J <L+1; J=J+8){
+	    r = I/8 + seq_i;
             c = J/8 + seq_i;
             for(int i=0; i<8; i++){
                 for(int j=0; j<8; j++){
-                    e1 = seq1[r] & (0x0000_00F0<<i);
-                    e2 = seq2[c] & (0x0000_00F0<<j);
+                    e1 = (seq1[r]>>((i+1)*4)) & (0x000F);
+                    e2 = (seq2[c]>>((j+1)*4)) & (0x000F);
                        if(e1 == e2)
                         match_score = match;
                        else
@@ -187,7 +189,7 @@ __global__ void read_align(uint32_t *seq1, uint32_t *seq2, char *seq1_out, char 
                         Score_Matrix[I+i][J+j].direction = x;
                         }
                         else if(Y_max >= X_max && Y_max >= M_max){
-                            Score_Matrix[I+i[J+j].value = Y_max;
+                            Score_Matrix[I+i][J+j].value = Y_max;
                             Score_Matrix[I+i][J+j].direction = y;
                              }
                          else if(M_max >= X_max && M_max >= Y_max){
@@ -198,11 +200,11 @@ __global__ void read_align(uint32_t *seq1, uint32_t *seq2, char *seq1_out, char 
             }
         } 
       }
-                
+   */             
         //A = Score_Matrix[0][0].value;
 	//seq1_out[A] = 'Y';
 /*Maximum Score in SW matrix*/
-  
+/*  
 	sw_entry sw_max;
 	int val;
 
@@ -223,9 +225,9 @@ __global__ void read_align(uint32_t *seq1, uint32_t *seq2, char *seq1_out, char 
           }
 	//A = Score_Matrix[0][0].value;
         //seq2_out[B] = 'W';
-	
+*/	
    /*Traceback function*/
-    
+/*    
      DP_dir SW_dir;
      char c1, c2; 
      
@@ -235,35 +237,35 @@ __global__ void read_align(uint32_t *seq1, uint32_t *seq2, char *seq1_out, char 
 	if(M[A][B]!=0 && n <= S_I){  
        		SW_dir = Score_Matrix[A][B].direction;   
     		if(SW_dir == m){
-                c1 = (s1[A/8 + seq_i] >>(A%8))& 0x0000_000F;
-    			c2 = (s2[B/8 + seq_i] >>(B%8))& 0x0000_000F;
+                c1 = (seq1[A/8 + seq_i] >>(A%8))& 0x000F;
+    			c2 = (seq2[B/8 + seq_i] >>(B%8))& 0x000F;
     			A = A-1;
     			B = B-1;
     		} else if(SW_dir == x){
-    		        c2 = '-'; 
-    		   	c1 = (s1[A/8 + seq_i] >>(A%8))& 0x0000_000F;
+    		        c2 = 0xE; 
+    		   	c1 = (seq1[A/8 + seq_i] >>(A%8))& 0x000F;
     		   	A = A-1;
     			}
     	       		else if(SW_dir == y){
-    	       	      		c1 = ;
-    	       	      		c2 = (s2[B/8 + seq_i] >>(B%8)) & 0x0000_000F;
+    	       	      		c1 = 0xE;
+    	       	      		c2 = (seq2[B/8 + seq_i] >>(B%8)) & 0x000F;
     	       	      		B = B-1;
     	            		}
 		    s1_out[n/8 + seq_i] |= (c1 << (A%8));
 	        s2_out[n/8 + seq_i] |= (c2 << (B%8));
        } 
 	 else if(M[A][B] == 0  && n <=S_I){//((M[A][B] != 0 && n > S_I)  || (M[A][B] == 0 && n <= S_I)){
-		s1_out[n/8 + seq_i] |= (0b111 << (A%8));
-	        s2_out[n + seq_i] |= (0b111 << (A%8));
+		s1_out[n/8 + seq_i] |= (0xF << (A%8));
+	        s2_out[n + seq_i] |= (0xF << (A%8));
 	     }else if(M[A][B] !=0 && n >S_I){
-		s1_out[n/8 + seq_i] |= (0b111 << (A%8));
-	        s2_out[n/8 + seq_i] |= (0b111 << (A%8));
+		s1_out[n/8 + seq_i] |= (0xF << (A%8));
+	        s2_out[n/8 + seq_i] |= (0xF << (A%8));
 	     }	
      
      }
-     unpacking(s1, seq1_out);
-     unpacking(s2, seq2_out);        
-
+     unpacking(s1_out, seq1_out);
+     unpacking(s2_out, seq2_out);        
+*/
     }
 }
 
@@ -319,13 +321,13 @@ int main(int argc, char *argv[]){
    size_t s_gpu = no_seq * r_L * sizeof(uint32_t);
   */ 
     /*Allocate memory in Device*/
-    uint32_t *seq1_d;
+    char *seq1_d;
     cudaMalloc(&seq1_d, s_size);
-    uint32_t *seq2_d;
+    char *seq2_d;
     cudaMalloc(&seq2_d, s_size);
-    uint32_t *seq1_out_d;
+    char *seq1_out_d;
     cudaMalloc(&seq1_out_d, s_size);
-    uint32_t *seq2_out_d;
+    char *seq2_out_d;
     cudaMalloc(&seq2_out_d, s_size);
 
     /* Load data from textfile */
