@@ -121,8 +121,30 @@ __global__ void read_align(char *sq1, char *sq2, char *seq1_out, char *seq2_out)
         /*Start scoring*/
        
         init_DP(M, X, Y);
-
-        packing(sq1, seq1);
+        /*data packing*/
+	    int p, j=0;
+	    seq1[0] = 0;
+	    for(int i=0; i<L+1; i++){
+		p = i%8;    
+		switch(sq1[i]){
+			case 'A': seq1[j] |= (sq1[i] & 0x0F) << 4*p;
+				  break;
+			case 'G': seq1[j] |= (sq1[i] & 0x0F) << 4*p;
+				  break;
+			case 'T': seq1[j] |= (sq1[i] & 0x0F) << 4*p;
+				  break;
+			case 'C': seq1[j] |= (sq1[i] & 0x0F) << 4*p;
+				  break;
+			case '\n': seq1[j] |= (sq1[i] & 0x0F) << 4*p;
+				   break;
+			case '-': seq1[j] |= (sq1[i] & 0x0F) << 4*p;
+				  break;
+		}
+		if(p==7){
+		  ++j;
+		  seq1[j] = 0;
+		}  
+	    }
         //packing(sq2, seq2);
         
             Score_Matrix[0][0].value = 0;
