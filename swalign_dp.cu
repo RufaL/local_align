@@ -39,9 +39,10 @@ __host__ __device__ void init_DP(int M[][L+1], int X[][L+1], int Y[][L+1]){
 __host__ __device__ void unpacking(uint32_t *s1, char *seq1_out){
     uint8_t c;
     int m=0;
-    for(int i=0; s1[i] !=0; i++){
+    
+    for(int i=0; s1[i]!=0; i++){
         for(int j=0; j<8; j++){
-           c = (s1[i] >> 4*j) & 0x000F;
+           c = (s1[i] >> 4*j) & 0x0F;
            switch(c){
             case 0x1: { seq1_out[m] = 'A';
                            m++;
@@ -79,11 +80,11 @@ __host__ __device__ void unpacking(uint32_t *s1, char *seq1_out){
 
 __global__ void read_align(char *sq1, char *sq2, char *seq1_out, char *seq2_out){
     
-   int seq_i;
+   int seq_i, sq_i;
    sw_entry Score_Matrix[L+1][L+1];
    int M[L+1][L+1], X[L+1][L+1], Y[L+1][L+1];  //DP matrices
    int A, B, S_I;
-   uint32_t *s1_out, *s2_out;
+   uint32_t s1_out[size], s2_out[size];
 
    
    uint32_t  seq1[size], seq2[size];
@@ -93,7 +94,8 @@ __global__ void read_align(char *sq1, char *sq2, char *seq1_out, char *seq2_out)
    if(index < no_seq)
    {   
         seq_i = index * size;
-        	    
+	sq_i = index * (L+1);
+            
         /*Start scoring*/
        
         init_DP(M, X, Y);
@@ -103,41 +105,21 @@ __global__ void read_align(char *sq1, char *sq2, char *seq1_out, char *seq2_out)
 	    seq2[0] = 0x0;
 	    for(int i=0; i<L+1; i++){
 		p = i%8;    
-		switch(sq1[i]){
-			case 'A': seq1[j] |= (sq1[i] & 0x0F) << 4*p;
-				  break;
-			case 'G': seq1[j] |= (sq1[i] & 0x0F) << 4*p;
-				  break;
-			case 'T': seq1[j] |= (sq1[i] & 0x0F) << 4*p;
-				  break;
-			case 'C': seq1[j] |= (sq1[i] & 0x0F) << 4*p;
-				  break;
-			case '\n': seq1[j] |= (sq1[i] & 0x0F) << 4*p;
-				   break;
-			case '-': seq1[j] |= (sq1[i] & 0x0F) << 4*p;
-				  break;
-		}
-		switch(sq2[i]){
-			case 'A': seq2[j] |= (sq2[i] & 0x0F) << 4*p;
-				  break;
-			case 'G': seq2[j] |= (sq2[i] & 0x0F) << 4*p;
-				  break;
-			case 'T': seq2[j] |= (sq2[i] & 0x0F) << 4*p;
-				  break;
-			case 'C': seq2[j] |= (sq2[i] & 0x0F) << 4*p;
-				  break;
-			case '\n': seq2[j] |= (sq2[i] & 0x0F) << 4*p;
-				   break;
-			case '-': seq2[j] |= (sq2[i] & 0x0F) << 4*p;
-				  break;
-		}
+	        seq1[j] |= (sq1[i+sq_i] & 0x0F) << 4*p;		  
+	        seq2[j] |= (sq2[i+sq_i] & 0x0F) << 4*p;
+				 
 		if(p==7){
 		  ++j;
 		  seq1[j] = 0;
 		  seq2[j] = 0;
 		} 
 	    }
-      
+
+            for(; j<size; j++){
+		    seq1[j] = 0;
+		    seq2[j] = 0;
+	    }
+
       /*Initializing score martix*/  
             Score_Matrix[0][0].value = 0;
             for(int j=1; j<L+1; j++){
@@ -150,7 +132,7 @@ __global__ void read_align(char *sq1, char *sq2, char *seq1_out, char *seq2_out)
        seq1_out[A] = 'Z';
 	   
  /*Compute DP matrices */
- /*     
+      
     int M_max =0, X_max, Y_max;
     int M_x, M_y, M_m;
     int match_score;
@@ -165,8 +147,9 @@ __global__ void read_align(char *sq1, char *sq2, char *seq1_out, char *seq2_out)
             c = J/8 + seq_i;
             for(int i=0; i<8; i++){
                 for(int j=0; j<8; j++){
-                    e1 = (seq1[r]>>((i+1)*4)) & (0x000F);
-                    e2 = (seq2[c]>>((j+1)*4)) & (0x000F);
+		    if((I+i < L+1) && (J+j < L+1)){	
+                    e1 = (seq1[r]>>((i+1)*4)) & (0x0F);
+                    e2 = (seq2[c]>>((j+1)*4)) & (0x0F);
                        if(e1 == e2)
                         match_score = match;
                        else
@@ -197,7 +180,7 @@ __global__ void read_align(char *sq1, char *sq2, char *seq1_out, char *seq2_out)
 
                         X[I+i][J+j] = X_max;
 
-
+                        
                         if(X_max >= Y_max && X_max >= M_max){
                         Score_Matrix[I+i][J+j].value = X_max;
                         Score_Matrix[I+i][J+j].direction = x;
@@ -210,15 +193,17 @@ __global__ void read_align(char *sq1, char *sq2, char *seq1_out, char *seq2_out)
                              Score_Matrix[I+i][J+j].value = M_max;
                              Score_Matrix[I+i][J+j].direction = m;
                               }
-                }
+		
+                   } 
+	       	}
             }
         } 
       }
-   */             
-        //A = Score_Matrix[0][0].value;
-	//seq1_out[A] = 'Y';
+                
+        A = Score_Matrix[0][0].value;
+	seq1_out[A] = 'Y';
 /*Maximum Score in SW matrix*/
-/*  
+
 	sw_entry sw_max;
 	int val;
 
@@ -237,49 +222,49 @@ __global__ void read_align(char *sq1, char *sq2, char *seq1_out, char *seq2_out)
 			}
 		}
           }
-	//A = Score_Matrix[0][0].value;
-        //seq2_out[B] = 'W';
-*/	
+	A = Score_Matrix[0][0].value;
+        seq2_out[B] = 'W';
+	
    /*Traceback function*/
-/*    
+   
      DP_dir SW_dir;
-     char c1, c2; 
+     uint8_t c1, c2; 
      
      for(int n = L; n >=0; --n){
         s1_out[n/8 + seq_i] = 0;
         s2_out[n/8 + seq_i] = 0;
 	if(M[A][B]!=0 && n <= S_I){  
-       		SW_dir = Score_Matrix[A][B].direction;   
+       		SW_dir = Score_Matrix[A][B].direction; 
     		if(SW_dir == m){
-                c1 = (seq1[A/8 + seq_i] >>(A%8))& 0x000F;
-    			c2 = (seq2[B/8 + seq_i] >>(B%8))& 0x000F;
+                        c1 = (seq1[A/8 + seq_i] >>(A%8)*4)& 0x0F;
+    			c2 = (seq2[B/8 + seq_i] >>(B%8)*4)& 0x0F;
     			A = A-1;
     			B = B-1;
     		} else if(SW_dir == x){
-    		        c2 = 0xE; 
-    		   	c1 = (seq1[A/8 + seq_i] >>(A%8))& 0x000F;
+    		        c2 = 0x0E; 
+    		   	c1 = (seq1[A/8 + seq_i] >>(A%8)*4)& 0x0F;
     		   	A = A-1;
     			}
     	       		else if(SW_dir == y){
-    	       	      		c1 = 0xE;
-    	       	      		c2 = (seq2[B/8 + seq_i] >>(B%8)) & 0x000F;
+    	       	      		c1 = 0x0E;
+    	       	      		c2 = (seq2[B/8 + seq_i] >>(B%8)*4) & 0x0F;
     	       	      		B = B-1;
     	            		}
-		    s1_out[n/8 + seq_i] |= (c1 << (A%8));
-	        s2_out[n/8 + seq_i] |= (c2 << (B%8));
-       } 
+		s1_out[n/8] |= (c1 << (A%8)*4);
+	        s2_out[n/8] |= (c2 << (B%8)*4);
+       }
 	 else if(M[A][B] == 0  && n <=S_I){//((M[A][B] != 0 && n > S_I)  || (M[A][B] == 0 && n <= S_I)){
-		s1_out[n/8 + seq_i] |= (0xF << (A%8));
-	        s2_out[n + seq_i] |= (0xF << (A%8));
+		s1_out[n/8] |= (0x0F << (A%8)*4);
+	        s2_out[n/8] |= (0x0F << (B%8)*4);
 	     }else if(M[A][B] !=0 && n >S_I){
-		s1_out[n/8 + seq_i] |= (0xF << (A%8));
-	        s2_out[n/8 + seq_i] |= (0xF << (A%8));
+		s1_out[n/8] |= (0x0F << (A%8)*4);
+	        s2_out[n/8] |= (0x0F << (B%8)*4);
 	     }	
      
      }
-     unpacking(s1_out, seq1_out);
-     unpacking(s2_out, seq2_out);        
-*/
+     unpacking(s1_out, &seq1_out[sq_i]);
+     unpacking(s2_out, &seq2_out[sq_i]);        
+
     }
 }
 
