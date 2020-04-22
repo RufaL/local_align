@@ -11,7 +11,7 @@
 #include "stdlib.h"
 #include "stdint.h"
 
-#define L 100
+#define L 150
 #define no_seq 10
 
 /*Enumeration of DP matrices*/
