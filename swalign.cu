@@ -84,6 +84,7 @@ __global__ void read_align(char *seq1, char *seq2, char *seq1_out, char *seq2_ou
 	   M_x = X[I-1][J-1] + match_score;
 	   M_y = Y[I-1][J-1] + match_score;
 
+	        M_max =0;
 		if(M_m >= M_x && M_m >= M_y && M_m > 0) 
 			M_max = M_m;
 		else if(M_x >= M_m && M_x >= M_y && M_x > 0)

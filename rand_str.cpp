@@ -8,8 +8,8 @@
  #include "stdint.h"
  #include "time.h"
 
- #define L 100
- #define n_seq 10
+ #define L 80
+ #define n_seq 100
 
  int main(){
  int lower = 1, upper = 4, count, num;

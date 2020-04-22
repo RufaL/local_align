@@ -11,8 +11,8 @@
 #include "stdlib.h"
 #include "stdint.h"
 
-#define L 150
-#define no_seq 10
+#define L 80
+#define no_seq 100
 
 /*Enumeration of DP matrices*/
 enum DP_dir{
