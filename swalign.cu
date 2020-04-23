@@ -17,11 +17,11 @@
 /*const int for penalty*/
 const int penalty = gap_open + gap_extn;    
 
-__host__ __device__ void init_DP(int M[][L+1], int X[][L+1], int Y[][L+1]){
+__host__ __device__ void init_DP(int16_t M[][L+1], int16_t X[][L+1], int16_t Y[][L+1]){
 	M[0][0] = 0;
 	X[0][0] = -1000;
 	Y[0][0] = -1000;
-	for(int i=1; i <L+1; i++){
+	for(int i=1; i <2; i++){
 		M[i][0] = 0;
 		X[i][0] = -1000;   //Just a large negative number
 		Y[i][0] = -1000;
@@ -38,8 +38,9 @@ __host__ __device__ void init_DP(int M[][L+1], int X[][L+1], int Y[][L+1]){
 __global__ void read_align(char *seq1, char *seq2, char *seq1_out, char *seq2_out){
     
    int seq_i;
-   sw_entry Score_Matrix[L+1][L+1];
-   int M[L+1][L+1], X[L+1][L+1], Y[L+1][L+1];  //DP matrices
+   uint16_t Score_Matrix[L+1][L+1];
+   uint8_t Dir[L][L/2];
+   int16_t M[2][L+1], X[2][L+1], Y[2][L+1];  //DP matrices
    int A, B, S_I;
 
    int index = blockIdx.x * blockDim.x +threadIdx.x;
@@ -54,15 +55,13 @@ __global__ void read_align(char *seq1, char *seq2, char *seq1_out, char *seq2_ou
         /*Start scoring*/
        
         init_DP(M, X, Y);
-        
-            Score_Matrix[0][0].value = 0;
-            for(int j=1; j<L+1; j++){
-              Score_Matrix[0][j].value = 0;
-            }
-            for(int i=1; i<L+1; i++){
-              Score_Matrix[i][0].value = 0;
-            }
-        //A = M[0][0];
+
+	Score_Matrix[0][0] = 0;
+	for(int i=1; i <L+1; i++){
+		Score_Matrix[i][0] = 0;
+	        Score_Matrix[0][i] = 0;
+	}
+       //A = M[0][0];
        //seq1_out[A] = 'Z';
 	   
  /*Compute DP matrices */
@@ -70,6 +69,10 @@ __global__ void read_align(char *seq1, char *seq2, char *seq1_out, char *seq2_ou
     int M_x, M_y, M_m;
     int match_score;
     int si, sj;
+    int sw_max;
+    Dir[0][0] = 0;
+    int d_I=0, d_J=0, d_p=0;
+   
 
     for(int I = 1; I < L+1; I++){
        for(int J = 1; J <L+1; J++){
@@ -80,9 +83,9 @@ __global__ void read_align(char *seq1, char *seq2, char *seq1_out, char *seq2_ou
 	   else
 		match_score = mismatch;
            
-	   M_m = M[I-1][J-1] + match_score;
-	   M_x = X[I-1][J-1] + match_score;
-	   M_y = Y[I-1][J-1] + match_score;
+	   M_m = M[(I-1)%2][J-1] + match_score;
+	   M_x  = X[(I-1)%2][J-1] + match_score;
+	   M_y = Y[(I-1)%2][J-1] + match_score;
 
 	        M_max =0;
 		if(M_m >= M_x && M_m >= M_y && M_m > 0) 
@@ -92,82 +95,87 @@ __global__ void read_align(char *seq1, char *seq2, char *seq1_out, char *seq2_ou
 		     else if(M_y >= M_m && M_y >= M_x && M_y > 0)
 			     M_max = M_y;
 
-		M[I][J] =  M_max;
+		M[I%2][J] =  M_max;
          
-	    Y_max = gap_extn + Y[I][J-1];
-	    if(penalty + M[I][J-1] > Y_max)
-		Y_max = M[I][J-1] + penalty;
+	    Y_max = gap_extn + Y[I%2][J-1];
+	    if(penalty + M[I%2][J-1] > Y_max)
+		Y_max = M[I%2][J-1] + penalty;
 
-	    Y[I][J] = Y_max;
+	    Y[I%2][J] = Y_max;
 
-	    X_max = gap_extn + X[I-1][J];
-	    if(penalty + M[I-1][J] > X_max)
-		X_max = M[I-1][J] + penalty;
+	    X_max = gap_extn + X[(I-1)%2][J];
+	    if(penalty + M[(I-1)%2][J] > X_max)
+		X_max = M[(I-1)%2][J] + penalty;
 
-	    X[I][J] = X_max;
+	    X[I%2][J] = X_max;
 
-
+            
 	    if(X_max >= Y_max && X_max >= M_max){
-		Score_Matrix[I][J].value = X_max;
-		Score_Matrix[I][J].direction = x;
+	       Score_Matrix[I][J] = X_max;
+	       Dir[d_I][d_J] |= (0x02 << 4*d_p);
 	    }
 	    else if(Y_max >= X_max && Y_max >= M_max){
-		    Score_Matrix[I][J].value = Y_max;
-		    Score_Matrix[I][J].direction = y;
+		    Score_Matrix[I][J] = Y_max;
+		    Dir[d_I][d_J] |= (0x03 << 4*d_p);
 		 }
 		 else if(M_max >= X_max && M_max >= Y_max){
-			 Score_Matrix[I][J].value = M_max;
-			 Score_Matrix[I][J].direction = m;
+			Score_Matrix[I][J] = M_max;
+			Dir[d_I][d_J] |= (0x01 << 4*d_p);
 		 }
-     
-         
+           ++d_p;		 
+
+           if(d_p == 2){
+              d_p = 0;
+	      ++d_J;
+	      if(d_J == L/2){
+		      d_J = 0;
+		      ++d_I;
+	      }
+	      if(d_I < L && d_J < L/2)
+	      	      Dir[d_I][d_J] = 0;
+	   }
+
+	   if(Score_Matrix[I][J] > sw_max){
+		   A = I;
+		   B = J;
+		   sw_max = Score_Matrix[I][J];
+	   }
+
+
 	} 
       }
-                
-        //A = Score_Matrix[0][0].value;
-	//seq1_out[A] = 'Y';
-/*Maximum Score in SW matrix*/
-  
-	sw_entry sw_max;
-	int val;
+   	
+      if(A >= B)
+	      S_I = A;
+      else
+	      S_I = B;
 
-	sw_max = Score_Matrix[0][0];
-	for(int i=0; i < L+1; i++){
-		for(int j=0; j < L+1; j++){
-			val = Score_Matrix[i][j].value;
-			if(val > sw_max.value){
-				sw_max.value = val;
-				A = i;
-				B = j;
-				if(i >= j)
-				  S_I = i;
-				else
-				  S_I = j;
-			}
-		}
-          }
-	//A = Score_Matrix[0][0].value;
-        //seq2_out[B] = 'W';
-	
+        //A = Score_Matrix[0][0].value;
+	//seq1_out[A] = 'Y';	
    /*Traceback function*/
     
-     DP_dir SW_dir;
+     uint8_t SW_dir;
      char c1, c2; 
+     int p_t;
      
      for(int n = L; n >=0; --n){
-	if(M[A][B]!=0 && n <= S_I){  
-       		SW_dir = Score_Matrix[A][B].direction;   
-    		if(SW_dir == m){
+	if(Score_Matrix[A][B]!=0 && n <= S_I){ 
+	        p_t = 1 - B%2;	
+		if(A>=1)
+       		SW_dir = (Dir[A-1][B/2] >> 4*p_t) & 0x0F;
+	        else
+	        SW_dir = 0;	
+    		if(SW_dir == 0x01){
                 	c1 = seq1[A + seq_i];
     			c2 = seq2[B + seq_i];
     			A = A-1;
     			B = B-1;
-    		} else if(SW_dir == x){
+    		} else if(SW_dir == 0x02){
     		        c2 = '-'; 
     		   	c1 = seq1[A + seq_i];
     		   	A = A-1;
     			}
-    	       		else if(SW_dir == y){
+    	       		else if(SW_dir == 0x03){
     	       	      		c1 = '-';
     	       	      		c2 = seq2[B + seq_i];
     	       	      		B = B-1;
@@ -175,15 +183,16 @@ __global__ void read_align(char *seq1, char *seq2, char *seq1_out, char *seq2_ou
 		seq1_out[n + seq_i] = c1;
 	        seq2_out[n + seq_i] = c2;
        } 
-	 else if(M[A][B] == 0  && n <=S_I){//((M[A][B] != 0 && n > S_I)  || (M[A][B] == 0 && n <= S_I)){
+	 else if(Score_Matrix[A][B] == 0  && n <=S_I){//((M[A][B] != 0 && n > S_I)  || (M[A][B] == 0 && n <= S_I)){
 		seq1_out[n + seq_i] = '.';
 	        seq2_out[n + seq_i] = '.';
-	     }else if(M[A][B] !=0 && n >S_I){
+	     }else if(Score_Matrix[A][B] !=0 && n >S_I){
 		seq1_out[n + seq_i] = '*';
 	        seq2_out[n + seq_i] = '*';
 	     }	
      
-     }
+	 }
+	 
              
 
     }
@@ -222,6 +231,10 @@ int main(int argc, char *argv[]){
     char head[] = "Sequence pair";
     int l_size = strlen(line);
     size_t  s_size = no_seq * (L+1) * sizeof(char) ;
+    cudaEvent_t start, stop;
+    float milliseconds;
+    cudaEventCreate(&start);
+    cudaEventCreate(&stop);
    
 
     /*Dynamic memory allocation at Host*/
@@ -256,21 +269,38 @@ int main(int argc, char *argv[]){
     fclose(input2);
     fflush(stdout);
     
+    cudaEventRecord(start);
     /*Copy data from Host to Device*/
     cudaMemcpy(seq1_d, seq1, s_size, cudaMemcpyHostToDevice);
     cudaMemcpy(seq2_d, seq2, s_size, cudaMemcpyHostToDevice);
-   
-    /*Perform alignment at Device*/
-    read_align<<<1,no_seq>>>(seq1_d, seq2_d, seq1_out_d, seq2_out_d);
+    cudaEventRecord(stop);
+    cudaEventSynchronize(stop);
+    milliseconds = 0;
+    cudaEventElapsedTime(&milliseconds, start, stop);
+    printf("Time in H to D:%4.4f\n", milliseconds);
   
+    cudaEventRecord(start);
+    /*Perform alignment at Device*/
+    read_align<<<1, (no_seq)>>>(seq1_d, seq2_d, seq1_out_d, seq2_out_d);
+    cudaEventRecord(stop);
     cudaDeviceSynchronize();
+    cudaEventSynchronize(stop);
+    milliseconds =0;
+    cudaEventElapsedTime(&milliseconds, start, stop);
+    printf("Time in kernel:%4.4f\n", milliseconds);
    
+    cudaEventRecord(start);
     /*Copy output data from Device to Host*/
     cudaMemcpy(seq1_out, seq1_out_d, s_size, cudaMemcpyDeviceToHost);
     cudaMemcpy(seq2_out, seq2_out_d, s_size, cudaMemcpyDeviceToHost);
-    cudaMemcpy(seq1, seq1_d, s_size, cudaMemcpyDeviceToHost);
-    cudaMemcpy(seq2, seq2_d, s_size, cudaMemcpyDeviceToHost);
-    
+    //cudaMemcpy(seq1, seq1_d, s_size, cudaMemcpyDeviceToHost);
+    //cudaMemcpy(seq2, seq2_d, s_size, cudaMemcpyDeviceToHost);
+    cudaEventRecord(stop);
+    cudaEventSynchronize(stop);
+    milliseconds =0;
+    cudaEventElapsedTime(&milliseconds, start, stop);
+    printf("Time in D to H:%4.4f\n",milliseconds);
+
     /* Write result to file */
     for(int m=0; m < no_seq; m++){
 	fwrite(head, sizeof(char), strlen(head), output);
@@ -292,6 +322,10 @@ int main(int argc, char *argv[]){
 
 	printf("Output complete.\n");
 	fflush(stdout);
+
+        cudaError_t err = cudaGetLastError();
+	if (err != cudaSuccess) 
+          printf("Error: %s\n", cudaGetErrorString(err));
 
     /*Free Device memory*/
     cudaFree(seq1_d);

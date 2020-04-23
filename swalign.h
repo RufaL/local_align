@@ -11,8 +11,8 @@
 #include "stdlib.h"
 #include "stdint.h"
 
-#define L 80
-#define no_seq 100
+#define L 100
+#define no_seq 1 
 
 /*Enumeration of DP matrices*/
 enum DP_dir{
@@ -24,8 +24,8 @@ enum DP_dir{
 
 /* Scoring Matrix entry data structure*/
 typedef struct {
-	int value;    //Value of SW matrix entry
-    DP_dir direction;  //Direction: M, X or Y which giving maximum score
+    int value;    //Value of SW matrix entry
+    char direction;  //Direction: M, X or Y which giving maximum score
 }sw_entry;
 
 const int match = 10, mismatch = -2;      //Match and Mismatch scores

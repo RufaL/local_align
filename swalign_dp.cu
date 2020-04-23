@@ -99,7 +99,6 @@ __global__ void read_align(char *sq1, char *sq2, char *seq1_out, char *seq2_out)
    {   
         seq_i = index * size;
 	sq_i = index * (L+1);
-            
         /*Start scoring*/
        
         init_DP(M, X, Y);
@@ -107,7 +106,7 @@ __global__ void read_align(char *sq1, char *sq2, char *seq1_out, char *seq2_out)
 	    int p, j=0;
 	    seq1[0] = 0x0;
 	    seq2[0] = 0x0;
-	    for(int i=0; i<L+1; i++){
+	    for(int i=0; i<(L+1); i++){
 		p = i%8;    
 	        seq1[j] |= (sq1[i+sq_i] & 0x0F) << 4*p;		  
 	        seq2[j] |= (sq2[i+sq_i] & 0x0F) << 4*p;
@@ -119,12 +118,14 @@ __global__ void read_align(char *sq1, char *sq2, char *seq1_out, char *seq2_out)
 		} 
 	    }
        	    
-       seq1_out[j] = 'A';
-       seq1_out[size-j] = 'A';
+       //seq1_out[j] = 'A';
+       //seq1_out[size-j] = 'A';
+	 unpacking(seq1, seq1_out);
+	 unpacking(seq2, seq2_out);
        
 
       /*Initializing score martix*/  
-       
+      /*
             Score_Matrix[0][0].value = 0;
             for(int j=1; j<L+1; j++){
               Score_Matrix[0][j].value = 0;
@@ -134,9 +135,9 @@ __global__ void read_align(char *sq1, char *sq2, char *seq1_out, char *seq2_out)
             }
        A = M[0][0];
        seq1_out[A] = 'Z';
-	   
+	*/   
  /*Compute DP matrices */
-      
+      /*
     int M_max =0, X_max, Y_max;
     int M_x, M_y, M_m;
     int match_score;
@@ -216,9 +217,9 @@ __global__ void read_align(char *sq1, char *sq2, char *seq1_out, char *seq2_out)
 	seq1_out[size-r] = 'C';
 	seq2_out[c] = 'D';
 	seq2_out[size-c] = 'D';
-	
+	*/
 /*Maximum Score in SW matrix*/
-
+/*
 	sw_entry sw_max;
 	int val;
 
@@ -237,11 +238,11 @@ __global__ void read_align(char *sq1, char *sq2, char *seq1_out, char *seq2_out)
 			}
 		}
           }
-	A = Score_Matrix[0][0].value;
+	seq1_out[A] = 'W';
         seq2_out[B] = 'W';
-	
+*/	
    /*Traceback function*/
-   
+  /* 
      DP_dir SW_dir;
      uint8_t c1, c2; 
      
@@ -281,7 +282,7 @@ __global__ void read_align(char *sq1, char *sq2, char *seq1_out, char *seq2_out)
      }
      unpacking(s1_out, &seq1_out[sq_i]);
      unpacking(s2_out, &seq2_out[sq_i]);        
-
+*/
     }
 }
 
@@ -316,6 +317,10 @@ int main(int argc, char *argv[]){
     char head[] = "Sequence pair";
     int l_size = strlen(line);
     size_t  s_size = no_seq * (L+1) * sizeof(char) ;
+    cudaEvent_t start, stop;
+    float milliseconds;
+    cudaEventCreate(&start);
+    cudaEventCreate(&stop);
    
 
     /*Dynamic memory allocation at Host*/
@@ -358,34 +363,46 @@ int main(int argc, char *argv[]){
     fclose(input2);
     fflush(stdout);
     
-    //printf("Strlen of seq1:%d, seq2:%d\n", strlen(seq1), strlen(seq2));
+    cudaEventRecord(start);
     /*Copy data from Host to Device*/
     cudaMemcpy(seq1_d, seq1, s_size, cudaMemcpyHostToDevice);
     cudaMemcpy(seq2_d, seq2, s_size, cudaMemcpyHostToDevice);
-   
+    cudaEventRecord(stop);
+    cudaEventSynchronize(stop);
+    milliseconds = 0;
+    cudaEventElapsedTime(&milliseconds, start, stop);
+    printf("Time in H to D:%4.4f\n", milliseconds);
+
+    
     /*Perform alignment at Device*/
     read_align<<<1,no_seq>>>(seq1_d, seq2_d, seq1_out_d, seq2_out_d);
   
     cudaDeviceSynchronize();
    
+    cudaEventRecord(start);
     /*Copy output data from Device to Host*/
     cudaMemcpy(seq1_out, seq1_out_d, s_size, cudaMemcpyDeviceToHost);
     cudaMemcpy(seq2_out, seq2_out_d, s_size, cudaMemcpyDeviceToHost);
-    cudaMemcpy(seq1, seq1_d, s_size, cudaMemcpyDeviceToHost);
-    cudaMemcpy(seq2, seq2_d, s_size, cudaMemcpyDeviceToHost);
-    //printf("Strlen of seq1_out:%d, seq2_out:%d\n",strlen(seq1_out), strlen(seq2_out));
+    //cudaMemcpy(seq1, seq1_d, s_size, cudaMemcpyDeviceToHost);
+    //cudaMemcpy(seq2, seq2_d, s_size, cudaMemcpyDeviceToHost);
+    cudaEventRecord(stop);
+    cudaEventSynchronize(stop);
+    milliseconds = 0;
+    cudaEventElapsedTime(&milliseconds, start, stop);
+    printf("Time in D to H:%4.4f\n", milliseconds);
+
     /* Write result to file */
     for(int m=0; m < no_seq; m++){
 	fwrite(head, sizeof(char), strlen(head), output);
         fprintf(output, "%d\n", m);	
         fwrite(line, sizeof(char), strlen(line), output);
-        //fwrite(&seq1[m*(L+1)], sizeof(char), L+1, output);
-        //fprintf(output,"\n");
+        fwrite(&seq1[m*(L+1)], sizeof(char), L+1, output);
+        fprintf(output,"\n");
         fwrite(&seq1_out[m*(L+1)], sizeof(char), L+1, output);
         fprintf(output,"\n");
         fwrite(line1, sizeof(char), strlen(line1), output);
-        //fwrite(&seq2[m*(L+1)], sizeof(char), L+1, output);
-        //fprintf(output, "\n");
+        fwrite(&seq2[m*(L+1)], sizeof(char), L+1, output);
+        fprintf(output, "\n");
         fwrite(&seq2_out[m*(L+1)], sizeof(char), L+1, output);
         if(m != no_seq-1)
           fprintf(output,"\n");
