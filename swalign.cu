@@ -161,10 +161,12 @@ __global__ void read_align(char *seq1, char *seq2, char *seq1_out, char *seq2_ou
      for(int n = L; n >=0; --n){
 	if(Score_Matrix[A][B]!=0 && n <= S_I){ 
 	        p_t = 1 - B%2;	
-		if(A>=1)
-       		SW_dir = (Dir[A-1][B/2] >> 4*p_t) & 0x0F;
-	        else
-	        SW_dir = 0;	
+		if(A>=1 && B>=1){
+		if(B%2 == 1)	
+       		   SW_dir = (Dir[A-1][(B-1)/2] >> 4*p_t) & 0x0F;
+		else
+                   SW_dir = (Dir[A-1][B/2 - 1] >> 4*p_t) & 0x0F;
+
     		if(SW_dir == 0x01){
                 	c1 = seq1[A + seq_i];
     			c2 = seq2[B + seq_i];
@@ -180,8 +182,10 @@ __global__ void read_align(char *seq1, char *seq2, char *seq1_out, char *seq2_ou
     	       	      		c2 = seq2[B + seq_i];
     	       	      		B = B-1;
     	            		}
+				
 		seq1_out[n + seq_i] = c1;
 	        seq2_out[n + seq_i] = c2;
+		}
        } 
 	 else if(Score_Matrix[A][B] == 0  && n <=S_I){//((M[A][B] != 0 && n > S_I)  || (M[A][B] == 0 && n <= S_I)){
 		seq1_out[n + seq_i] = '.';

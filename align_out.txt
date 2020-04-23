@@ -1,3 +1,30 @@
 Sequence pair0
-Output seq 1:........CGTCTCGA--TT-GCGC-CG-AG-AA-CACTGGGCCCTGGGT-CTACGTTTCATGACGTGCAATGGAT-TTA-CA-T-GTTTA-CGTG-C-**
-Output seq 2:........CTTCTCTCCAT-TGTG-CC-AA-CA-TC--CGAACAT-ACGTGCTCCAAATGTAGAAGCACCCTCAA-CT--AC-CGTGCT--TC-TGACC**
+Output seq 1:..CGTCTCGA*
+Output seq 2:..CGCCGAGA*
+Sequence pair1
+Output seq 1:..CGTCTCGA*
+Output seq 2:..CGCCGAGA*
+Sequence pair2
+Output seq 1:.GCACTGAT**
+Output seq 2:.GCTTTTGT**
+Sequence pair3
+Output seq 1:.....GTAAT*
+Output seq 2:.....GTACT*
+Sequence pair4
+Output seq 1:.....CGGCTT
+Output seq 2:.....CGGTTT
+Sequence pair5
+Output seq 1:.....GAAAA*
+Output seq 2:.....GAAGA*
+Sequence pair6
+Output seq 1:...TTATA***
+Output seq 2:...TTGAA***
+Sequence pair7
+Output seq 1:....CTCGTA*
+Output seq 2:....CTCGTA*
+Sequence pair8
+Output seq 1:...AGTCTGTT
+Output seq 2:...ACCGAGTT
+Sequence pair9
+Output seq 1:..CGTCGTAG*
+Output seq 2:..CGTTCTAG*
