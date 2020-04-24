@@ -39,44 +39,30 @@ __host__ __device__ void init_DP(int M[][L+1], int X[][L+1], int Y[][L+1]){
 __host__ __device__ void unpacking(uint32_t *s1, char *seq1_out){
     uint8_t c;
     int m=0;
-    
-    for(int i=0; s1[i]!=0; i++){
-        for(int j=0; j<8; j++){
-           c = (s1[i] >> 4*j) & 0x0F;
+     
+    for(int i=0; i<size; i++){
+	    c = s1[i] & 0x0F;
+        for(int j=0; (c!=0 && j<8); ){
+          
            switch(c){
-            case 0x1: { seq1_out[m] = 'A';
-                           m++;
-                          }
+            case 0x1: seq1_out[m] = 'A';
                           break;
-	    case 0x2: { seq1_out[m] = '*';
-	                  m++;
-                         }
+	    case 0x3: seq1_out[m] = 'C';
                          break;		      
-            case 0x7: { seq1_out[m] = 'G';
-                           m++;
-                          }
+            case 0x7: seq1_out[m] = 'G';
                           break;
-            case 0x4: { seq1_out[m] = 'T';
-                           m++;
-                          }
+            case 0x4: seq1_out[m] = 'T';
                           break;
-            case 0x3: { seq1_out[m] = 'C';
-                           m++;
-                          }
+            case 0xD: seq1_out[m] = '-';
                           break;
-            case 0xA: { seq1_out[m] = '\n';
-                           m++;
-                          }
-                          break;
-            case 0xE: { seq1_out[m] = '-';
-                           m++;
-                          }
-                          break;
-            case 0xF: { seq1_out[m] = '.';
-                           m++;
-                          }
+            case 0xE: seq1_out[m] = '.';
+                          break;	      
+            default: seq1_out[m] = '*';
                           break;
             }
+	   m++;
+	   j++;
+	   c = (s1[i] >> 4*j) & 0x0F;
         
         }
     }
@@ -88,10 +74,10 @@ __global__ void read_align(char *sq1, char *sq2, char *seq1_out, char *seq2_out)
    sw_entry Score_Matrix[L+1][L+1];
    int M[L+1][L+1], X[L+1][L+1], Y[L+1][L+1];  //DP matrices
    int A, B, S_I;
-   uint32_t s1_out[size], s2_out[size];
-
-   
+   uint32_t s1_out[size], s2_out[size];  
    uint32_t  seq1[size], seq2[size];
+
+   int test;
 
    int index = blockIdx.x * blockDim.x +threadIdx.x;
    
@@ -99,6 +85,8 @@ __global__ void read_align(char *sq1, char *sq2, char *seq1_out, char *seq2_out)
    {   
         seq_i = index * size;
 	sq_i = index * (L+1);
+	sq1[sq_i] = '-';
+	sq2[sq_i] = '-';
         /*Start scoring*/
        
         init_DP(M, X, Y);
@@ -108,8 +96,8 @@ __global__ void read_align(char *sq1, char *sq2, char *seq1_out, char *seq2_out)
 	    seq2[0] = 0x0;
 	    for(int i=0; i<(L+1); i++){
 		p = i%8;    
-	        seq1[j] |= (sq1[i+sq_i] & 0x0F) << 4*p;		  
-	        seq2[j] |= (sq2[i+sq_i] & 0x0F) << 4*p;
+	        seq1[j] |= (sq1[i + sq_i] & 0x0F) << 4*p;		  
+	        seq2[j] |= (sq2[i + sq_i] & 0x0F) << 4*p;
 				 
 		if(p==7){
 		  ++j;
@@ -117,11 +105,9 @@ __global__ void read_align(char *sq1, char *sq2, char *seq1_out, char *seq2_out)
 		  seq2[j] = 0;
 		} 
 	    }
-       	    
-       //seq1_out[j] = 'A';
-       //seq1_out[size-j] = 'A';
-	 unpacking(seq1, seq1_out);
-	 unpacking(seq2, seq2_out);
+       
+	 unpacking(seq1, &seq1_out[sq_i]);
+	 unpacking(seq2, &seq2_out[sq_i]);
        
 
       /*Initializing score martix*/  
@@ -375,7 +361,7 @@ int main(int argc, char *argv[]){
 
     
     /*Perform alignment at Device*/
-    read_align<<<1,no_seq>>>(seq1_d, seq2_d, seq1_out_d, seq2_out_d);
+    read_align<<<1,(no_seq)>>>(seq1_d, seq2_d, seq1_out_d, seq2_out_d);
   
     cudaDeviceSynchronize();
    
@@ -383,8 +369,8 @@ int main(int argc, char *argv[]){
     /*Copy output data from Device to Host*/
     cudaMemcpy(seq1_out, seq1_out_d, s_size, cudaMemcpyDeviceToHost);
     cudaMemcpy(seq2_out, seq2_out_d, s_size, cudaMemcpyDeviceToHost);
-    //cudaMemcpy(seq1, seq1_d, s_size, cudaMemcpyDeviceToHost);
-    //cudaMemcpy(seq2, seq2_d, s_size, cudaMemcpyDeviceToHost);
+    cudaMemcpy(seq1, seq1_d, s_size, cudaMemcpyDeviceToHost);
+    cudaMemcpy(seq2, seq2_d, s_size, cudaMemcpyDeviceToHost);
     cudaEventRecord(stop);
     cudaEventSynchronize(stop);
     milliseconds = 0;
