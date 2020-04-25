@@ -57,7 +57,7 @@ __host__ __device__ void unpacking(uint32_t *s1, char *seq1_out){
                           break;
             case 0xE: seq1_out[m] = '.';
                           break;	      
-            default: seq1_out[m] = '*';
+            case 0xA: seq1_out[m] = '*';
                           break;
             }
 	   m++;
@@ -127,7 +127,7 @@ __global__ void read_align(char *sq1, char *sq2, char *seq1_out, char *seq2_out)
     int M_max =0, X_max, Y_max;
     int M_x, M_y, M_m;
     int match_score;
-    int si, sj, count=0;
+    int si, sj;
     int r, c;
     uint8_t e1, e2;
 
@@ -143,9 +143,9 @@ __global__ void read_align(char *sq1, char *sq2, char *seq1_out, char *seq2_out)
 			e1 = (seq1[r] >> 4*(i+1)) & 0x0F;
                 for(int j=0; j<8; j++){
 			if(j == 7)
-			   e2 = seq2[r+1] & 0x0F;
+			   e2 = seq2[c+1] & 0x0F;
 			else 
-			   e2 = (seq2[r] >> 4*(j+1)) & 0x0F;
+			   e2 = (seq2[c] >> 4*(j+1)) & 0x0F;
 		    if((I+i < L+1) && (J+j < L+1)){	
 		      
                        if(e1 == e2)
@@ -157,6 +157,7 @@ __global__ void read_align(char *sq1, char *sq2, char *seq1_out, char *seq2_out)
                        M_x = X[I+i-1][J+j-1] + match_score;
                        M_y = Y[I+i-1][J+j-1] + match_score;
 
+		        M_max = 0;
                         if(M_m >= M_x && M_m >= M_y && M_m > 0) 
                             M_max = M_m;
                         else if(M_x >= M_m && M_x >= M_y && M_x > 0)
@@ -181,15 +182,15 @@ __global__ void read_align(char *sq1, char *sq2, char *seq1_out, char *seq2_out)
                         
                         if(X_max >= Y_max && X_max >= M_max){
                         Score_Matrix[I+i][J+j].value = X_max;
-                        Score_Matrix[I+i][J+j].direction = x;
+                        Score_Matrix[I+i][J+j].direction = 'x';
                         }
                         else if(Y_max >= X_max && Y_max >= M_max){
                             Score_Matrix[I+i][J+j].value = Y_max;
-                            Score_Matrix[I+i][J+j].direction = y;
+                            Score_Matrix[I+i][J+j].direction = 'y';
                              }
                          else if(M_max >= X_max && M_max >= Y_max){
                              Score_Matrix[I+i][J+j].value = M_max;
-                             Score_Matrix[I+i][J+j].direction = m;
+                             Score_Matrix[I+i][J+j].direction = 'm';
                               }
                    } 
 			
@@ -197,14 +198,14 @@ __global__ void read_align(char *sq1, char *sq2, char *seq1_out, char *seq2_out)
             }
         } 
       }
-                
-        //A = Score_Matrix[0][0].value;
-	//seq1_out[A] = 'Y';
-	//seq1_out[r] = 'C';
-	//seq1_out[size-r] = 'C';
-	//seq2_out[c] = 'D';
-	//seq2_out[size-c] = 'D';
-	
+        /*        
+        A = Score_Matrix[0][0].value;
+	seq1_out[A] = 'Y';
+	seq1_out[r] = 'C';
+	seq1_out[size-r] = 'C';
+	seq2_out[c] = 'D';
+	seq2_out[size-c] = 'D';
+	*/
 /*Maximum Score in SW matrix*/
 
 	sw_entry sw_max;
@@ -225,50 +226,62 @@ __global__ void read_align(char *sq1, char *sq2, char *seq1_out, char *seq2_out)
 			}
 		}
           }
-	seq1_out[A] = 'W';
-        seq2_out[B] = 'W';
-*/	
+	//seq1_out[S_I+sq_i] = 'W';
+        //seq2_out[B+sq_i] = 'W';
+	
    /*Traceback function*/
-   
-     DP_dir SW_dir;
+  
+     char SW_dir;
      uint8_t c1, c2;
      int count=0;
-     
+     uint8_t eo1, eo2;
+     int prev_id = 0;
+
      for(int n = L; n >=0; --n){
-	if(count == 0){     
+	if(prev_id != n/8){     
         s1_out[n/8] = 0;
         s2_out[n/8] = 0;
 	}
 	if(M[A][B]!=0 && n <= S_I){  
-       		SW_dir = Score_Matrix[A][B].direction; 
+       		SW_dir = Score_Matrix[A][B].direction;
+		/*
+	        if(A%8 == 0)
+	        	eo1 = seq1[A/8 + 1] & 0x0F;
+		else */
+			eo1 = (seq1[A/8] >> 4*(A%8)) & 0x0F;
+                /*
+		if(B%8 == 0)
+			eo2 = seq2[B/8 + 1] & 0x0F;
+		else*/
+			eo2 = (seq2[B/8] >> 4*(B%8)) & 0x0F;
+
     		if(SW_dir == 'm'){
-                        c1 = (seq1[A/8] >>(A%8)*4)& 0x0F;
-    			c2 = (seq2[B/8] >>(B%8)*4)& 0x0F;
+                        c1 = eo1;
+    			c2 = eo2;
     			A = A-1;
     			B = B-1;
     		} else if(SW_dir == 'x'){
-    		        c2 = 0x0E; 
-    		   	c1 = (seq1[A/8] >>(A%8)*4)& 0x0F;
+    		        c2 = 0x0D; 
+    		   	c1 = eo1;
     		   	A = A-1;
     			}
     	       		else if(SW_dir == 'y'){
-    	       	      		c1 = 0x0E;
-    	       	      		c2 = (seq2[B/8] >>(B%8)*4) & 0x0F;
+    	       	      		c1 = 0x0D;
+    	       	      		c2 = eo2;
     	       	      		B = B-1;
     	            		}
-		s1_out[n/8] |= (c1 << (7 - (A%8))*4);
-	        s2_out[n/8] |= (c2 << (7 - (B%8))*4);
-		count++;
+		s1_out[n/8] |= (c1 << 4*(n%8));
+	        s2_out[n/8] |= (c2 << 4*(n%8));
+		
        }
-	 else if(M[A][B] == 0  && n <=S_I){
-		s1_out[n/8] |= (0x0F << (7 - (A%8))*4);
-	        s2_out[n/8] |= (0x0F << (7 - (B%8))*4);
+	else if(M[A][B] == 0  && n <=S_I){
+		s1_out[n/8] |= (0x0E << ((n%8))*4);
+	        s2_out[n/8] |= (0x0E << ((n%8))*4);
 	     }else if(M[A][B] !=0 && n >S_I){
-		s1_out[n/8] |= (0x02 << (7 - (A%8))*4);
-	        s2_out[n/8] |= (0x02 << (7 - (B%8))*4);
+		s1_out[n/8] |= (0x0A << ((n%8))*4);
+	        s2_out[n/8] |= (0x0A << ((n%8))*4);
 	     }	
-	     if(count == 7)
-	     	count = 0;
+	     prev_id = n/8;
      
      }
      unpacking(s1_out, &seq1_out[sq_i]);
@@ -387,13 +400,13 @@ int main(int argc, char *argv[]){
 	fwrite(head, sizeof(char), strlen(head), output);
         fprintf(output, "%d\n", m);	
         fwrite(line, sizeof(char), strlen(line), output);
-        fwrite(&seq1[m*(L+1)], sizeof(char), L+1, output);
-        fprintf(output,"\n");
+        //fwrite(&seq1[m*(L+1)], sizeof(char), L+1, output);
+        //fprintf(output,"\n");
         fwrite(&seq1_out[m*(L+1)], sizeof(char), L+1, output);
         fprintf(output,"\n");
         fwrite(line1, sizeof(char), strlen(line1), output);
-        fwrite(&seq2[m*(L+1)], sizeof(char), L+1, output);
-        fprintf(output, "\n");
+        //fwrite(&seq2[m*(L+1)], sizeof(char), L+1, output);
+        //fprintf(output, "\n");
         fwrite(&seq2_out[m*(L+1)], sizeof(char), L+1, output);
         if(m != no_seq-1)
           fprintf(output,"\n");
