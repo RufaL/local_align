@@ -123,9 +123,9 @@ __global__ void read_align(char *sq1, char *sq2, char *seq1_out, char *seq2_out)
 	  
  /*Compute DP matrices */
       
-    int M_max =0, X_max, Y_max;
-    int M_x, M_y, M_m;
-    int match_score;
+    int16_t M_max =0, X_max, Y_max;
+    int16_t M_x, M_y, M_m;
+    int16_t match_score;
     int si, sj;
     int r, c;
     int sw_max;
@@ -148,7 +148,7 @@ __global__ void read_align(char *sq1, char *sq2, char *seq1_out, char *seq2_out)
 			else 
 			   e2 = (seq2[c] >> 4*(j+1)) & 0x0F;
 		    if((I+i < L+1) && (J+j < L+1)){	
-		      
+		         
                        if(e1 == e2)
                         match_score = match;
                        else
@@ -180,17 +180,17 @@ __global__ void read_align(char *sq1, char *sq2, char *seq1_out, char *seq2_out)
 
                         X[(I+i)%2][J+j] = X_max;
 
-                        
+                         
                         if(X_max >= Y_max && X_max >= M_max){
-                        Score_Matrix[I+i][J+j] = X_max;
-                        Dir[d_I][d_J] |= (0x02 << 4*d_p);
+                          Score_Matrix[I+i][J+j] = X_max;
+                          Dir[d_I][d_J] |= (0x02 << 4*d_p);
                         }
                         else if(Y_max >= X_max && Y_max >= M_max){
-                            Score_Matrix[I+i][J+j] = Y_max;
+                            //Score_Matrix[I+i][J+j] = Y_max;
                             Dir[d_I][d_J] |= (0x03 << 4*d_p);
                              }
                          else if(M_max >= X_max && M_max >= Y_max){
-                             Score_Matrix[I+i][J+j] = M_max;
+                             //Score_Matrix[I+i][J+j] = M_max;
                              Dir[d_I][d_J] |= (0x01 << 4*d_p);
                               }
 			    d_p++;
@@ -205,37 +205,38 @@ __global__ void read_align(char *sq1, char *sq2, char *seq1_out, char *seq2_out)
 			      if(d_I < L && d_J < L/2)
 				      Dir[d_I][d_J] = 0;
 			   }
-
+                           /*   
 			   if(Score_Matrix[I+i][J+j] > sw_max){
 				   A = I+i;
 				   B = J+j;
 				   sw_max = Score_Matrix[I+i][J+j];
 			   }
+			   */
                    } 
 			
 	       	}
             }
         } 
       }
-        /*        
-        A = Score_Matrix[0][0].value;
+              
+        A = Score_Matrix[0][0];
 	seq1_out[A] = 'Y';
 	seq1_out[r] = 'C';
 	seq1_out[size-r] = 'C';
 	seq2_out[c] = 'D';
 	seq2_out[size-c] = 'D';
-	*/
+	
 	   
 	 if(A >= B)
 	      S_I = A;
          else
 	      S_I = B;
-
-	//seq1_out[S_I+sq_i] = 'W';
-        //seq2_out[B+sq_i] = 'W';
+      
+	//seq1_out[A] = 'W';
+        //seq2_out[B] = 'W';
 	
    /*Traceback function*/
-  
+ /* 
      char SW_dir;
      uint8_t c1, c2;
      int count=0;
@@ -276,6 +277,7 @@ __global__ void read_align(char *sq1, char *sq2, char *seq1_out, char *seq2_out)
     	            		}
 		s1_out[n/8] |= (c1 << 4*(n%8));
 	        s2_out[n/8] |= (c2 << 4*(n%8));
+		}
 		
        }
 	else if(M[A][B] == 0  && n <=S_I){
@@ -290,7 +292,7 @@ __global__ void read_align(char *sq1, char *sq2, char *seq1_out, char *seq2_out)
      }
      unpacking(s1_out, &seq1_out[sq_i]);
      unpacking(s2_out, &seq2_out[sq_i]);        
-
+*/
     }
 }
 
@@ -419,7 +421,11 @@ int main(int argc, char *argv[]){
 	fclose(output);
 
 	printf("Output complete.\n");
-	fflush(stdout);
+	fflush(stdout); 
+
+	cudaError_t err= cudaGetLastError();
+	if( err != cudaSuccess)
+		printf("Error:%s\n",cudaGetErrorString(err));
 
     /*Free Device memory*/
     cudaFree(seq1_d);
