@@ -19,7 +19,7 @@ const int penalty = gap_open + gap_extn;
 #define size ((L+1)/8 +1)
 
 
-__host__ __device__ void init_DP(int M[][L+1], int X[][L+1], int Y[][L+1]){
+__host__ __device__ void init_DP(int16_t M[][L+1], int16_t X[][L+1], int16_t Y[][L+1]){
 	M[0][0] = 0;
 	X[0][0] = -1000;
 	Y[0][0] = -1000;
@@ -71,8 +71,9 @@ __host__ __device__ void unpacking(uint32_t *s1, char *seq1_out){
 __global__ void read_align(char *sq1, char *sq2, char *seq1_out, char *seq2_out){
     
    int seq_i, sq_i;
-   sw_entry Score_Matrix[L+1][L+1];
-   int M[L+1][L+1], X[L+1][L+1], Y[L+1][L+1];  //DP matrices
+   uint16_t Score_Matrix[L+1][L+1];
+   uint8_t Dir[L][L/2];
+   int16_t M[2][L+1], X[2][L+1], Y[2][L+1];  //DP matrices
    int A, B, S_I;
    uint32_t s1_out[size], s2_out[size];  
    uint32_t  seq1[size], seq2[size];
@@ -112,12 +113,10 @@ __global__ void read_align(char *sq1, char *sq2, char *seq1_out, char *seq2_out)
 
       /*Initializing score martix*/  
       
-            Score_Matrix[0][0].value = 0;
+            Score_Matrix[0][0] = 0;
             for(int j=1; j<L+1; j++){
-              Score_Matrix[0][j].value = 0;
-            }
-            for(int i=1; i<L+1; i++){
-              Score_Matrix[i][0].value = 0;
+              Score_Matrix[0][j] = 0;
+              Score_Matrix[j][0] = 0;
             }
        //A = M[0][0];
        //seq1_out[A] = 'Z';
@@ -129,8 +128,10 @@ __global__ void read_align(char *sq1, char *sq2, char *seq1_out, char *seq2_out)
     int match_score;
     int si, sj;
     int r, c;
+    int sw_max;
     uint8_t e1, e2;
-
+    Dir[0][0] = 0;
+    int d_I=0, d_J=0, d_p=0;
 
     for(int I = 1; I < L+1; I=I+8){
        for(int J = 1; J <L+1; J=J+8){
@@ -153,9 +154,9 @@ __global__ void read_align(char *sq1, char *sq2, char *seq1_out, char *seq2_out)
                        else
                         match_score = mismatch;
                            
-                       M_m = M[I+i-1][J+j-1] + match_score;
-                       M_x = X[I+i-1][J+j-1] + match_score;
-                       M_y = Y[I+i-1][J+j-1] + match_score;
+                       M_m = M[(I+i-1)%2][J+j-1] + match_score;
+                       M_x = X[(I+i-1)%2][J+j-1] + match_score;
+                       M_y = Y[(I+i-1)%2][J+j-1] + match_score;
 
 		        M_max = 0;
                         if(M_m >= M_x && M_m >= M_y && M_m > 0) 
@@ -165,33 +166,51 @@ __global__ void read_align(char *sq1, char *sq2, char *seq1_out, char *seq2_out)
                              else if(M_y >= M_m && M_y >= M_x && M_y > 0)
                                  M_max = M_y;
 
-                        M[I+i][J+j] =  M_max;
+                        M[(I+i)%2][J+j] =  M_max;
                          
-                        Y_max = gap_extn + Y[I+i][J+j-1];
-                        if(penalty + M[I+i][J+j-1] > Y_max)
-                        Y_max = M[I+i][J+j-1] + penalty;
+                        Y_max = gap_extn + Y[(I+i)%2][J+j-1];
+                        if(penalty + M[(I+i)%2][J+j-1] > Y_max)
+                        Y_max = M[(I+i)%2][J+j-1] + penalty;
 
-                        Y[I+i][J+j] = Y_max;
+                        Y[(I+i)%2][J+j] = Y_max;
 
-                        X_max = gap_extn + X[I+i-1][J+j];
-                        if(penalty + M[I+i-1][J+j] > X_max)
-                        X_max = M[I+i-1][J+j] + penalty;
+                        X_max = gap_extn + X[(I+i-1)%2][J+j];
+                        if(penalty + M[(I+i-1)%2][J+j] > X_max)
+                        X_max = M[(I+i-1)%2][J+j] + penalty;
 
-                        X[I+i][J+j] = X_max;
+                        X[(I+i)%2][J+j] = X_max;
 
                         
                         if(X_max >= Y_max && X_max >= M_max){
-                        Score_Matrix[I+i][J+j].value = X_max;
-                        Score_Matrix[I+i][J+j].direction = 'x';
+                        Score_Matrix[I+i][J+j] = X_max;
+                        Dir[d_I][d_J] |= (0x02 << 4*d_p);
                         }
                         else if(Y_max >= X_max && Y_max >= M_max){
-                            Score_Matrix[I+i][J+j].value = Y_max;
-                            Score_Matrix[I+i][J+j].direction = 'y';
+                            Score_Matrix[I+i][J+j] = Y_max;
+                            Dir[d_I][d_J] |= (0x03 << 4*d_p);
                              }
                          else if(M_max >= X_max && M_max >= Y_max){
-                             Score_Matrix[I+i][J+j].value = M_max;
-                             Score_Matrix[I+i][J+j].direction = 'm';
+                             Score_Matrix[I+i][J+j] = M_max;
+                             Dir[d_I][d_J] |= (0x01 << 4*d_p);
                               }
+			    d_p++;
+			    
+			    if(d_p == 2){
+			      d_p = 0;
+			      ++d_J;
+			      if(d_J == L/2){
+				      d_J = 0;
+				      ++d_I;
+			      }
+			      if(d_I < L && d_J < L/2)
+				      Dir[d_I][d_J] = 0;
+			   }
+
+			   if(Score_Matrix[I+i][J+j] > sw_max){
+				   A = I+i;
+				   B = J+j;
+				   sw_max = Score_Matrix[I+i][J+j];
+			   }
                    } 
 			
 	       	}
@@ -206,26 +225,12 @@ __global__ void read_align(char *sq1, char *sq2, char *seq1_out, char *seq2_out)
 	seq2_out[c] = 'D';
 	seq2_out[size-c] = 'D';
 	*/
-/*Maximum Score in SW matrix*/
+	   
+	 if(A >= B)
+	      S_I = A;
+         else
+	      S_I = B;
 
-	sw_entry sw_max;
-	int val;
-
-	sw_max = Score_Matrix[0][0];
-	for(int i=0; i < L+1; i++){
-		for(int j=0; j < L+1; j++){
-			val = Score_Matrix[i][j].value;
-			if(val > sw_max.value){
-				sw_max.value = val;
-				A = i;
-				B = j;
-				if(i >= j)
-				  S_I = i;
-				else
-				  S_I = j;
-			}
-		}
-          }
 	//seq1_out[S_I+sq_i] = 'W';
         //seq2_out[B+sq_i] = 'W';
 	
@@ -236,6 +241,7 @@ __global__ void read_align(char *sq1, char *sq2, char *seq1_out, char *seq2_out)
      int count=0;
      uint8_t eo1, eo2;
      int prev_id = 0;
+     int p_t;
 
      for(int n = L; n >=0; --n){
 	if(prev_id != n/8){     
@@ -243,17 +249,15 @@ __global__ void read_align(char *sq1, char *sq2, char *seq1_out, char *seq2_out)
         s2_out[n/8] = 0;
 	}
 	if(M[A][B]!=0 && n <= S_I){  
-       		SW_dir = Score_Matrix[A][B].direction;
-		/*
-	        if(A%8 == 0)
-	        	eo1 = seq1[A/8 + 1] & 0x0F;
-		else */
-			eo1 = (seq1[A/8] >> 4*(A%8)) & 0x0F;
-                /*
-		if(B%8 == 0)
-			eo2 = seq2[B/8 + 1] & 0x0F;
-		else*/
-			eo2 = (seq2[B/8] >> 4*(B%8)) & 0x0F;
+       		p_t = 1 - B%2;	
+		if(A>=1 && B>=1){
+		if(B%2 == 1)	
+       		   SW_dir = (Dir[A-1][(B-1)/2] >> 4*p_t) & 0x0F;
+		else
+                   SW_dir = (Dir[A-1][B/2 - 1] >> 4*p_t) & 0x0F;
+		
+		eo1 = (seq1[A/8] >> 4*(A%8)) & 0x0F;
+                eo2 = (seq2[B/8] >> 4*(B%8)) & 0x0F;
 
     		if(SW_dir == 'm'){
                         c1 = eo1;
